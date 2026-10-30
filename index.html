@@ -726,35 +726,35 @@ function drawTop(res,cur,big){
   }
 }
 function drawFront(res,cur,big){
+  // true front view (orthographic along X): heights are measured from the ground, so lowering the car moves the
+  // body down and the ground stays put; a steered wheel foreshortens like a real one would
   const gz=res.gz;
-  const F=frame($("#vFront canvas"),[-1160,1160,gz-60,700],p=>[p[1],p[2]]);
-  ground(F,gz,-1160,1160);
-  seg2(F,F.S([0,gz-40]),F.S([0,700]),C["ink-3"],0.8,CL);
+  const F=frame($("#vFront canvas"),[-1160,1160,-60,880],p=>[p[1],p[2]-gz]);
+  ground(F,0,-1160,1160);
+  seg2(F,F.S([0,-40]),F.S([0,880]),C["ink-3"],0.8,CL);
   for(const [k,col] of [["L",C.red],["R",C.blue]])polyline(F,res.sw.map(r=>r&&!r.bad?r[k].CP:null),col,1.2,[2,3]);
-  // each wheel with its knuckle and steering axis is drawn in its own transverse plane (normal = wheel heading),
-  // so a steered wheel stays flat and camber/KPI read true; body parts stay in the body's front plane
-  const FW=m=>{const w=m.p.WC,l=m.lat,sd=m.p.side;return {...F,P:q=>F.S([w[1]+sd*dot(sub(q,w),l),q[2]])};};
   const rc=cur.rc;
   for(const [m,g,col] of [[cur.L,res.gL,C.red],[cur.R,res.gR,C.blue]]){
-    const W=FW(m),p=m.p;
-    wheel(W,m,col);
-    seg2(F,F.P(g.AF),W.P(p.LBJ),C.ink,2.4);seg2(F,F.P(g.AR),W.P(p.LBJ),C.ink,2.4);
-    seg2(F,F.P(p.TRI),W.P(p.TRO),col,2);
-    polyline(W,[p.LBJ,p.D,p.WC,p.TRO,p.LBJ],C["ink-2"],1);
-    const bodyTop=add(p.D,mul(p.u,150));seg(W,sub(p.D,mul(p.u,60)),bodyTop,C.ink,5.5);seg(W,bodyTop,p.T,C.ink,1.6);
-    seg(W,m.G,add(p.T,mul(nrm(m.dir),70)),col,1,[12,3,2,3]);
-    mark(W,p.LBJ,C.ink);mark(W,p.TRO,col);mark(W,p.T,C.ink);mark(F,g.AF,C.ink,3.5);mark(F,g.AR,C.ink,3.5);mark(F,g.plateC,C["ink-3"],3);
-    if(rc){const Rc=F.S([rc.y,rc.z]),ic=m.p.side>0?rc.iL:rc.iR;seg2(F,W.P(m.CP),Rc,col,0.9,[5,3]);seg2(F,Rc,F.S([ic[1],ic[2]]),col,0.6,[2,4]);}
-    const sd=p.side,top=W.P(add(p.WC,[0,0,R+42])),wide=F.W>620;
-    text(F,top,`${sd>0?"левое":"правое"}${wide?" · развал":""} ${m.camber.toFixed(2)}°`,col,{align:"center",size:14,w:600,clamp:true});
-    if(big)text(F,W.P(add(p.T,[0,sd*60,40])),`KPI ${m.kpi.toFixed(1)}°`,col,{align:sd>0?"left":"right",size:13,clamp:true});
-    const a=W.P(m.G),b=W.P(m.CP);if(big)dimH(F,a[0],b[0],a[1]+20,`скраб ${m.scrub.toFixed(0)}`,col);
+    const p=m.p;
+    wheel(F,m,col);
+    seg(F,g.AF,p.LBJ,C.ink,2.4);seg(F,g.AR,p.LBJ,C.ink,2.4);
+    seg(F,p.TRI,p.TRO,col,2);
+    polyline(F,[p.LBJ,p.D,p.WC,p.TRO,p.LBJ],C["ink-2"],1);
+    const bodyTop=add(p.D,mul(p.u,150));seg(F,sub(p.D,mul(p.u,60)),bodyTop,C.ink,5.5);seg(F,bodyTop,p.T,C.ink,1.6);
+    seg(F,m.G,add(p.T,mul(nrm(m.dir),70)),col,1,[12,3,2,3]);
+    mark(F,p.LBJ,C.ink);mark(F,p.TRO,col);mark(F,p.T,C.ink);mark(F,g.AF,C.ink,3.5);mark(F,g.AR,C.ink,3.5);mark(F,g.plateC,C["ink-3"],3);
+    if(rc){const Rc=F.S([rc.y,rc.z-gz]),ic=m.p.side>0?rc.iL:rc.iR;seg2(F,F.P(m.CP),Rc,col,0.9,[5,3]);seg2(F,Rc,F.S([ic[1],ic[2]-gz]),col,0.6,[2,4]);}
+    const sd=p.side,wide=F.W>620;
+    // camber label sits on the wheel itself (halo keeps it legible), KPI at the top mount: they cannot collide at any ride height
+    text(F,F.P(add(p.WC,[0,0,R*0.62])),`${sd>0?"левое":"правое"}${wide?" · развал":""} ${fx(m.camber,2)}°`,col,{align:"center",size:14,w:600,clamp:true});
+    if(big)text(F,F.P(add(p.T,[0,sd*70,30])),`KPI ${fx(m.kpi,1)}°`,col,{align:sd>0?"left":"right",size:13,clamp:true});
+    const a=F.P(m.G),b=F.P(m.CP);if(big)dimH(F,a[0],b[0],a[1]+20,`скраб ${m.scrub.toFixed(0)}`,col);
   }
   seg(F,cur.L.p.TRI,cur.R.p.TRI,C.ink,6);
-  if(rc){const Rc=F.S([rc.y,rc.z]);markXY(F,Rc[0],Rc[1],C.mark,6);
+  if(rc){const Rc=F.S([rc.y,rc.z-gz]);markXY(F,Rc[0],Rc[1],C.mark,6);
     // label goes above the mark when the roll centre sits close to the ground hatch
-    const below=Rc[1]+34<F.S([0,gz])[1];
-    text(F,[Rc[0],Rc[1]+(below?20:-18)],`центр крена ${rc.h.toFixed(0)} мм`,C["mark-ink"],{size:13.5,w:600,align:"center"});}
+    const below=Rc[1]+34<F.S([0,0])[1];
+    text(F,[Rc[0],Rc[1]+(below?20:-18)],`центр крена ${fx(rc.h,0)} мм`,C["mark-ink"],{size:13.5,w:600,align:"center"});}
 }
 function drawSide(res,cur,big){
   // true side view of the wheel: projected on the wheel's own plane (heading f × vertical), so a steered wheel stays a flat circle
@@ -762,15 +762,15 @@ function drawSide(res,cur,big){
   const cv=$("#vSide canvas"),cw=cv.getBoundingClientRect().width;
   // left column holds two enlarged details (trail at the ground, caster offset at the hub): at full scale they are a few pixels
   const iw=Math.round(Math.max(118,Math.min(250,cw*0.34)));
-  const proj=q=>[-dot(sub(q,p.WC),f),q[2]];
-  // the steer solve holds the body still, so a steered wheel's patch drops below static ground: draw the ground
-  // under the patch (the body is what rises) and say by how much
+  // heights are measured from this wheel's contact patch: the ground stays put on screen while the body moves
+  // (lowering, or the lift a steered wheel gives the body)
   const gzw=m.CP[2];
-  const F=frame(cv,[-430,430,gz-90,700],proj,[iw,cw-iw]);
+  const proj=q=>[-dot(sub(q,p.WC),f),q[2]-gzw];
+  const F=frame(cv,[-430,430,-90,880],proj,[iw,cw-iw]);
   const u0=(iw-F.S([0,0])[0])/F.sc;
-  ground(F,gzw,u0+12/F.sc,430);
-  if(m.jack>0.5)text(F,[F.W-8,F.S([0,gzw])[1]+22],`кузов поднят на ${m.jack.toFixed(1)} мм`,C["ink-2"],{size:12,align:"right"});
-  seg2(F,F.S([0,gzw-50]),F.S([0,690]),C["ink-3"],0.8,CL);
+  ground(F,0,u0+12/F.sc,430);
+  if(m.jack>0.5)text(F,[F.W-8,F.S([0,0])[1]+22],`кузов поднят на ${m.jack.toFixed(1)} мм`,C["ink-2"],{size:12,align:"right"});
+  seg2(F,F.S([0,-50]),F.S([0,870]),C["ink-3"],0.8,CL);
   wheel(F,m,C.red);
   const bodyTop=add(p.D,mul(p.u,150));seg(F,sub(p.D,mul(p.u,60)),bodyTop,C.ink,5.5);seg(F,bodyTop,p.T,C.ink,1.6);
   polyline(F,[p.LBJ,p.D,p.WC,p.TRO,p.LBJ],C["ink-2"],1);
@@ -787,7 +787,7 @@ function drawSide(res,cur,big){
   const d2=nrm(add(mul(f,dot(m.dir,f)),[0,0,m.dir[2]]));
   const foot=Q=>add(p.LBJ,mul(d2,dot(sub(Q,p.LBJ),f)*dot(d2,f)+(Q[2]-p.LBJ[2])*d2[2]));
   const fCP=foot(m.CP),fWC=foot(p.WC);
-  text(F,[iw+8,F.S([0,680])[1]],"← вперёд",C["ink-2"],{size:12});
+  text(F,[iw+8,F.S([0,850])[1]],"← вперёд",C["ink-2"],{size:12});
   if(big)handle(F,p.WC,"knuckle","кулак ↔","h");else mark(F,p.WC,C.red);
   // details
   const gap=6,ih=(F.H-3*gap)/2;
@@ -809,13 +809,13 @@ function drawSide(res,cur,big){
     if(title)text(D,[x+7,y+ih-10],title,C["mark-ink"],{size:12.5,w:600});
   };
   const k0=D=>D.sc*0.8;
-  const axisIn=(D,cu,e)=>seg(D,add(m.G,mul(ax,-e*3)),add(m.G,mul(ax,(cu[1]-gz)/ax[2]+e*3)),C.red,1.3,[12,3,2,3]);
+  const axisIn=(D,cu,e)=>seg(D,add(m.G,mul(ax,-e*3)),add(m.G,mul(ax,(cu[1]+gzw-m.G[2])/ax[2]+e*3)),C.red,1.3,[12,3,2,3]);
   detail(gap,"Б",[p.WC,fWC],(D,cu,e)=>{
     const w0=D.P(p.WC);seg2(D,[w0[0]-e*k0(D),w0[1]],[w0[0]+e*k0(D),w0[1]],C["ink-3"],0.8,CL);seg2(D,[w0[0],w0[1]-e*k0(D)],[w0[0],w0[1]+e*k0(D)],C["ink-3"],0.8,CL);
     axisIn(D,cu,e);seg(D,p.WC,fWC,C.mark,2);mark(D,p.WC,C.red);mark(D,fWC,C.mark,3);
   },`кастер-офсет ${m.coff.toFixed(1)} мм`);
   detail(F.H-gap-ih,"А",[m.G,m.CP,fCP],(D,cu,e)=>{
-    ground(D,gzw,cu[0]-e*3,cu[0]+e*3);
+    ground(D,0,cu[0]-e*3,cu[0]+e*3);
     seg2(D,D.P(m.CP),D.S([proj(m.CP)[0],cu[1]+e*3]),C["ink-3"],0.8,[4,3]);
     axisIn(D,cu,e);
     seg(D,m.CP,fCP,C.mark,2);mark(D,fCP,C.mark,3);
