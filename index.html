@@ -426,7 +426,8 @@ function sideMeas(p,gz){
   const f=[Math.cos(del),Math.sin(del),0];
   const lat=sd>0?[-f[1],f[0],0]:[f[1],-f[0],0];
   const dir=sub(p.T,p.LBJ);
-  const G=add(p.LBJ,mul(dir,(gz-p.LBJ[2])/dir[2]));
+  // axis-ground point at the real contact-patch height (a steered wheel jacks, so its patch sits below static ground)
+  const G=add(p.LBJ,mul(dir,(CP[2]-p.LBJ[2])/dir[2]));
   const df=dot(dir,f),dz=dir[2],dl=Math.hypot(df,dz);
   const perp=Q=>(dot(sub(Q,p.LBJ),f)*dz-(Q[2]-p.LBJ[2])*df)/dl;
   return {p,CP,G,camber,del:del/DEG,f,lat,dir,
@@ -445,15 +446,25 @@ function lineX(a1,a2,b1,b2){
   const d1=[a2[0]-a1[0],a2[1]-a1[1]],d2=[b2[0]-b1[0],b2[1]-b1[1]];
   const den=d1[0]*d2[1]-d1[1]*d2[0];if(Math.abs(den)<1e-12)return null;
   const t=((b1[0]-a1[0])*d2[1]-(b1[1]-a1[1])*d2[0])/den;return [a1[0]+d1[0]*t,a1[1]+d1[1]*t];}
-function rollCenter(mL,mR,gL,gR,gz){
-  const iL=icOf(mL.p,gL),iR=icOf(mR.p,gR);if(!iL||!iR)return null;
+function rollCenter(mL,mR,gL,gR,gz,s=0){
+  // each wheel's instant centre from the contact-patch velocity in heave (±2 mm of travel, finite difference):
+  // the classical arm/strut construction ignores bump steer, which with ~37 mm of trail moves the patch sideways too
+  const ic=(m,g)=>{
+    const z=m.p.WC[2],a=solve(g,"height",{s,z:z+2},m.p.q),b=solve(g,"height",{s,z:z-2},m.p.q);if(!a.ok||!b.ok)return null;
+    const c1=cpOf(pose(g,a.q,s)),c2=cpOf(pose(g,b.q,s));const vy=c1[1]-c2[1],vz=c1[2]-c2[2],n=Math.hypot(vy,vz);if(n<1e-9)return null;
+    const cl=icOf(m.p,g),d=cl?Math.hypot(cl[1]-m.CP[1],cl[2]-m.CP[2]):2000; // IC drawn at the classical distance
+    let py=-vz/n,pz=vy/n;if(py*m.CP[1]>0){py=-py;pz=-pz;}            // perpendicular to the patch path, pointing inboard
+    return [m.CP[0],m.CP[1]+py*d,m.CP[2]+pz*d];};
+  const iL=ic(mL,gL),iR=ic(mR,gR);if(!iL||!iR)return null;
   const x=lineX([mL.CP[1],mL.CP[2]],[iL[1],iL[2]],[mR.CP[1],mR.CP[2]],[iR[1],iR[2]]);
   return x?{y:x[0],z:x[1],h:x[1]-gz,iL,iR}:null;
 }
-function ackermann(s,mL,mR,kTrack){
+function ackermann(s,mL,mR,kTrack,c0){
   if(Math.abs(s)<0.4)return null;
   const m=s>0?1:-1, inn=s>0?mL:mR, out=s>0?mR:mL;
-  const di=inn.del*m*DEG, dO=out.del*m*DEG;
+  // angles are measured from the straight-ahead pose (c0), so static toe and bump-steer toe are not counted as Ackermann
+  const i0=c0?(s>0?c0.L:c0.R).del:0, o0=c0?(s>0?c0.R:c0.L).del:0;
+  const di=(inn.del-i0)*m*DEG, dO=(out.del-o0)*m*DEG;
   if(di<1.5*DEG)return null;
   const L=P.wheelbase, xr=HP.WC[0]-L;
   const xi=inn.CP[0],yi=inn.CP[1]*m,xo=out.CP[0],yo=out.CP[1]*m;
@@ -503,7 +514,7 @@ function compute(){
       qL=a.q;qR=b.q;
       const mL=sideMeas(pose(gL,a.q,s),gz),mR=sideMeas(pose(gR,b.q,s),gz);
       if(Math.abs(mL.del)>89||Math.abs(mR.del)>89){alive=false;sw[idx]={s,bad:true};continue;}
-      sw[idx]={s,L:mL,R:mR,ack:ackermann(s,mL,mR,out.kTrack),rc:rollCenter(mL,mR,gL,gR,gz)};
+      sw[idx]={s,L:mL,R:mR,ack:ackermann(s,mL,mR,out.kTrack,sw[N])};
     }
   }
   out.sw=sw;
@@ -530,7 +541,7 @@ function computeCurrent(res){
   const qL=best?best.L.p.q:gL.q0,qR=best?best.R.p.q:gR.q0;
   const a=solve(gL,"steer",{s,th:gL.th0},qL),b=solve(gR,"steer",{s,th:gR.th0},qR);
   const mL=sideMeas(pose(gL,a.q,s),gz),mR=sideMeas(pose(gR,b.q,s),gz);
-  return {ok:a.ok&&b.ok,s,L:mL,R:mR,ack:ackermann(s,mL,mR,res.kTrack),rc:rollCenter(mL,mR,gL,gR,gz)};
+  return {ok:a.ok&&b.ok,s,L:mL,R:mR,ack:ackermann(s,mL,mR,res.kTrack,sw[N]),rc:rollCenter(mL,mR,gL,gR,gz,s)};
 }
 // summary numbers that do not depend on where the wheel is turned right now
 function metrics(res){
