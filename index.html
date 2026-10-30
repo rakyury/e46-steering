@@ -168,7 +168,7 @@ canvas{display:block;width:100%;touch-action:pan-y}
 #vFront canvas{aspect-ratio:2.2/1}
 #vSide canvas{aspect-ratio:1.25/1}
 #vPlan canvas{aspect-ratio:1.1/1}
-.main #vSide canvas{aspect-ratio:1.45/1}
+.main #vSide canvas{aspect-ratio:1.3/1}
 .ch canvas{aspect-ratio:1.5/1}
 .drag-hint{font-size:13px;font-style:italic;color:var(--mark-ink);white-space:nowrap}
 
@@ -244,7 +244,7 @@ details.settings summary small{font-size:var(--t-sm);color:var(--ink-2)}
   .tabs button span{display:none}
   #vTop canvas{aspect-ratio:2/1} /* the drawing is 2.7:1; 1.6 left a blank band under it on phones */
   #vFront canvas{aspect-ratio:1.7/1}
-  .main #vSide canvas{aspect-ratio:1.1/1}
+  .main #vSide canvas{aspect-ratio:1/1}
   .ch canvas{aspect-ratio:1.7/1}
   .fig{padding:var(--s2) var(--s3) var(--s3)}
   .fig h3{font-size:var(--t-lg)}
@@ -768,50 +768,52 @@ function drawFront(res,cur,big){
     text(F,[Rc[0],Rc[1]+(below?20:-18)],`центр крена ${fx(rc.h,0)} мм`,C["mark-ink"],{size:13.5,w:600,align:"center"});}
 }
 function drawSide(res,cur,big){
-  // side view of the left wheel in its own plane (heading × vertical), framed on the lower half of the wheel:
-  // trail and the offsets are tens of millimetres, so the sheet is scaled to show them and the strut top runs off it.
+  // the textbook caster picture: the whole wheel seen from the left in its own plane, the steering axis leaning back
+  // through it from the strut top to the ground, the caster angle at the top, trail at the bottom.
   // Heights are measured from this wheel's contact patch, so the ground stays put and the body lifts.
   const m=cur.L,p=m.p,f=m.f,gzw=m.CP[2];
   const proj=q=>[-dot(sub(q,p.WC),f),q[2]-gzw];
   const cv=$("#vSide canvas");
-  const F=frame(cv,[-250,250,-50,450],proj);
-  const c=F.ctx,wide=F.W>520;
+  const F=frame(cv,[-400,400,-70,830],proj);
+  const c=F.ctx,wide=F.W>520,fs=wide?14:12.5;
   ground(F,0,-1000,1000);
-  // wheel (cropped by the sheet), knuckle and the lower strut, kept light
-  wheel(F,m,C.red);
+  // wheel: one clean circle (the projection on its own plane) with the rim
+  const Ws=F.P(p.WC),Rp=R*F.sc;
+  c.beginPath();c.arc(Ws[0],Ws[1],Rp,0,2*Math.PI);c.fillStyle=C.fill;c.fill();c.strokeStyle=C.red;c.lineWidth=1.6;c.stroke();
+  c.beginPath();c.arc(Ws[0],Ws[1],216*F.sc,0,2*Math.PI);c.strokeStyle=C.red;c.lineWidth=0.8;c.setLineDash([4,4]);c.stroke();c.setLineDash([]);
+  // strut and knuckle, light: this is what the slot, lollipop and plate move
+  const bodyTop=add(p.D,mul(p.u,150));seg(F,sub(p.D,mul(p.u,60)),bodyTop,C.ink,5);seg(F,bodyTop,p.T,C.ink,1.6);
   polyline(F,[p.LBJ,p.D,p.WC,p.TRO,p.LBJ],C["ink-2"],1);
-  seg(F,sub(p.D,mul(p.u,60)),add(p.D,mul(p.u,150)),C.ink,5);
-  mark(F,p.LBJ,C.ink);mark(F,p.TRO,C.red,3.5);
-  // steering axis through the whole sheet, and the vertical through the point where it meets the ground
-  const ax=nrm(m.dir);seg(F,add(m.G,mul(ax,-120)),add(m.G,mul(ax,1200)),C.red,1.8,[14,4,3,4]);
-  const Gs=F.P(m.G),topY=F.S([0,450])[1];
-  seg2(F,[Gs[0],Gs[1]+F.sc*40],[Gs[0],topY],C["ink-3"],1,[5,4]);
-  // caster: arc between the vertical and the axis, as high on the sheet as it fits
-  const A5=F.P(add(m.G,mul(ax,500)));
-  const rr=Gs[1]-F.S([0,395])[1],aV=-Math.PI/2,aA=Math.atan2(A5[1]-Gs[1],A5[0]-Gs[0]);
-  c.beginPath();c.arc(Gs[0],Gs[1],rr,Math.min(aV,aA),Math.max(aV,aA));c.strokeStyle=C.red;c.lineWidth=1.6;c.stroke();
-  // the arc label sits beside both lines (they are only a few degrees apart up here); the legend names the lines
+  mark(F,p.LBJ,C.ink);mark(F,p.TRO,C.red,3.5);mark(F,p.T,C.ink);
+  // vertical through the wheel centre, and the steering axis from above the top mount to below the ground
+  const topY=F.S([0,830])[1];
+  seg2(F,[Ws[0],F.S([0,-40])[1]],[Ws[0],topY],C["ink-3"],1,[5,4]);
+  const ax=nrm(m.dir);seg(F,add(m.G,mul(ax,-90)),add(m.G,mul(ax,(830-m.G[2]+gzw)/ax[2])),C.red,1.8,[14,4,3,4]);
+  // caster angle: arc centred on the ground point, drawn up at the top of the wheel between the vertical and the axis
+  const Gs=F.P(m.G),rr=(Gs[1]-Ws[1])+Rp*0.92;
+  const A=F.P(add(m.G,mul(ax,600))),aV=-Math.PI/2,aA=Math.atan2(A[1]-Gs[1],A[0]-Gs[0]);
+  seg2(F,[Gs[0],Gs[1]],[Gs[0],Gs[1]-rr-10],C["ink-3"],0.8,[3,3]);
+  c.beginPath();c.arc(Gs[0],Gs[1],rr,Math.min(aV,aA),Math.max(aV,aA));c.strokeStyle=C.red;c.lineWidth=1.8;c.stroke();
   const Ax=Gs[0]+rr*Math.cos(aA);
-  text(F,[Math.max(Gs[0],Ax)+14,Gs[1]-rr+4],`кастер ${fx(m.caster,2)}°`,C.red,{size:wide?15:13.5,w:600,align:"left",clamp:true});
+  text(F,[Math.max(Gs[0],Ax)+12,Gs[1]-rr-2],`кастер ${fx(m.caster,2)}°`,C.red,{size:wide?16:14,w:600,align:"left",clamp:true});
   // feet of the perpendiculars on the axis, measured in the wheel plane
   const d2=nrm(add(mul(f,dot(m.dir,f)),[0,0,m.dir[2]]));
   const foot=Q=>add(p.LBJ,mul(d2,dot(sub(Q,p.LBJ),f)*dot(d2,f)+(Q[2]-p.LBJ[2])*d2[2]));
   const fCP=foot(m.CP),fWC=foot(p.WC);
-  // ground: axis entry point, contact patch, trail between them
+  // ground: where the axis enters the ground, the contact patch, and the trail between them
   const CPs=F.P(m.CP),gLeft=Gs[0]<CPs[0];
   mark(F,m.G,C.ink,4.5);mark(F,m.CP,C.red,5);
-  dimH(F,Gs[0],CPs[0],Gs[1]+F.sc*22+8,`трейл ${fx(m.trail,1)}`,C.red);
-  text(F,[Gs[0]+(gLeft?-10:10),Gs[1]-6],"ось в землю",C["ink-2"],{size:11.5,align:gLeft?"right":"left",clamp:true});
-  text(F,[CPs[0]+(gLeft?10:-10),CPs[1]-6],"пятно",C.red,{size:11.5,align:gLeft?"left":"right",clamp:true});
-  // mechanical trail: perpendicular from the patch to the axis; its label sits above, clear of the ground labels
-  const a=F.P(fCP);seg(F,m.CP,fCP,C.mark,2.2);mark(F,fCP,C.mark,3);
-  text(F,[(a[0]+CPs[0])/2,Math.min(a[1],CPs[1])-30],`мех. трейл ${fx(m.mtrail,1)}`,C["mark-ink"],{size:wide?14:12.5,w:600,align:"center",clamp:true});
-  // caster offset: perpendicular from the wheel centre to the axis; label under the hub, the drag handle's label is above it
-  const b=F.P(fWC),Ws=F.P(p.WC);seg(F,p.WC,fWC,C.mark,2.2);mark(F,fWC,C.mark,3);
-  text(F,[Ws[0],Ws[1]+30],`кастер-офсет ${fx(m.coff,1)}`,C["mark-ink"],{size:wide?14:12.5,w:600,align:"center",clamp:true});
+  dimH(F,Gs[0],CPs[0],Gs[1]+24,`трейл ${fx(m.trail,1)}`,C.red);
+  text(F,[Gs[0]+(gLeft?-10:10),Gs[1]-10],"ось в землю",C["ink-2"],{size:11.5,align:gLeft?"right":"left",clamp:true});
+  text(F,[CPs[0]+(gLeft?10:-10),CPs[1]-10],"пятно",C.red,{size:11.5,align:gLeft?"left":"right",clamp:true});
+  // mechanical trail (patch → axis) and caster offset (hub → axis), both perpendicular to the axis
+  const a=F.P(fCP);seg(F,m.CP,fCP,C.mark,2.4);mark(F,fCP,C.mark,3);
+  text(F,[(a[0]+CPs[0])/2,Math.min(a[1],CPs[1])-30],`мех. трейл ${fx(m.mtrail,1)}`,C["mark-ink"],{size:fs,w:600,align:"center",clamp:true});
+  const b=F.P(fWC);seg(F,p.WC,fWC,C.mark,2.4);mark(F,fWC,C.mark,3);
+  text(F,[Ws[0],Ws[1]+30],`кастер-офсет ${fx(m.coff,1)}`,C["mark-ink"],{size:fs,w:600,align:"center",clamp:true});
   text(F,[10,topY+14],"← вперёд",C["ink-2"],{size:12});
-  if(m.jack>0.5)text(F,[F.W-8,Gs[1]+F.sc*22+30],`кузов поднят на ${m.jack.toFixed(1)} мм`,C["ink-2"],{size:12,align:"right"});
-  if(big)handle(F,p.WC,"knuckle","кулак ↔","h");else mark(F,p.WC,C.red);
+  if(m.jack>0.5)text(F,[F.W-8,Gs[1]+46],`кузов поднят на ${m.jack.toFixed(1)} мм`,C["ink-2"],{size:12,align:"right"});
+  if(big)handle(F,p.WC,"knuckle","кулак ↔︎","h");else mark(F,p.WC,C.red);
 }
 function drawPlan(res,cur){
   const L=P.wheelbase,x0=HP.WC[0],xr=x0-L;const a=cur.ack;
