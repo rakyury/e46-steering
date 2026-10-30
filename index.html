@@ -116,7 +116,7 @@ input[type=text],input[type=number]{font-variant-numeric:tabular-nums}
 .ctl-h label{font-size:var(--t-lg);font-style:italic;font-weight:500;line-height:1.15}
 .stepper{display:flex;align-items:center;border:1px solid var(--ink-2);flex:0 0 auto}
 .stepper button{border:0;width:30px;height:32px;min-height:0;padding:0;font-family:var(--f-num);font-size:18px;line-height:1}
-.stepper input{width:58px;border:0;border-left:1px solid var(--ink-3);border-right:1px solid var(--ink-3);background:transparent;color:var(--ink);text-align:center;font-size:14px;height:32px;border-radius:0}
+.stepper input{width:66px;font-variant-numeric:tabular-nums;padding:0 2px;border:0;border-left:1px solid var(--ink-3);border-right:1px solid var(--ink-3);background:transparent;color:var(--ink);text-align:center;font-size:14px;height:32px;border-radius:0}
 .stepper input:focus-visible{outline-offset:-2px}
 .stepper i{font-style:normal;font-size:var(--t-xs);color:var(--ink-2);padding:0 6px 0 4px;font-family:var(--f-num)}
 .ctl .scale{display:flex;justify-content:space-between;font-family:var(--f-num);font-size:11px;color:var(--ink-2);margin-top:1px}
@@ -208,7 +208,7 @@ details.settings summary small{font-size:var(--t-sm);color:var(--ink-2)}
 }
 @media (pointer:coarse){
   .drag-hint{display:none}
-  .stepper button{width:var(--tap);height:var(--tap)}.stepper input{height:var(--tap);font-size:15px}
+  .stepper button{width:var(--tap);height:var(--tap)}.stepper input{height:var(--tap);font-size:15px;width:74px} /* "−11.5" must fit */
   input[type=range]{height:36px}
   .wheel .mini{padding:5px 12px;font-size:14px;min-height:36px}
   .ctl .undo{padding:var(--s2) 0}
@@ -222,7 +222,12 @@ details.settings summary small{font-size:var(--t-sm);color:var(--ink-2)}
   .rest > *{border-right:0}
   .head{padding:var(--s2) var(--s3)}
   .head p{display:none}
-  .wheel{grid-template-columns:auto minmax(0,1fr);gap:2px var(--s2);padding:6px var(--s3)}
+  /* on a phone the steering strip is a bottom bar under the thumb, not a header the data scrolls away from */
+  .wheel{position:fixed;top:auto;bottom:0;left:0;right:0;border-top:1.5px solid var(--ink);border-bottom:0;
+    padding-bottom:calc(6px + env(safe-area-inset-bottom,0px));box-shadow:0 -6px 16px -10px rgba(0,0,0,.45);
+    grid-template-columns:auto minmax(0,1fr);gap:2px var(--s2);padding:6px var(--s3)}
+  body{padding-bottom:calc(var(--strip,150px) + env(safe-area-inset-bottom,0px))}
+  .sheet{border-bottom:0}
   .wheel .play{min-width:var(--tap);width:var(--tap);padding:0;align-self:start}
   .wheel .play em{display:none}
   .wheel input[type=range]{height:var(--tap)}
@@ -230,10 +235,10 @@ details.settings summary small{font-size:var(--t-sm);color:var(--ink-2)}
   .steer .lbl{font-size:var(--t-xs);margin-top:0;justify-content:center}
   .steer .lbl > span:first-child,.steer .lbl > span:last-child{display:none}
   .wheel .mini,#alignTg{min-height:36px;padding:3px 10px;font-size:13px}
-  .chips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--s1)}
-  .chip{width:auto;min-width:0;padding:1px 6px 2px;min-height:0}
-  .chip span{font-size:11px}
-  .chip b,.chip input{font-size:14px;white-space:nowrap}
+  .chips{display:grid;grid-template-columns:1fr 1fr 1fr 1.4fr 1.1fr;gap:var(--s1)}
+  .chip{width:auto;min-width:0;padding:1px 3px 2px;min-height:0}
+  .chip span{font-size:0}.chip span::before{content:attr(data-s);font-size:10.5px} /* short labels: five chips in one row */
+  .chip b,.chip input{font-size:13px;white-space:nowrap;letter-spacing:-.03em}
   .align{gap:var(--s1) var(--s3);font-size:14px}
   .tabs button{padding:8px 12px}
   .tabs button span{display:none}
@@ -250,7 +255,7 @@ details.settings summary small{font-size:var(--t-sm);color:var(--ink-2)}
   #alignTg{display:inline-block}
   .ctl{padding:var(--s2) var(--s3) var(--s3)}
   .delta{padding:var(--s3)}
-  .tabs{position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--strip,118px));z-index:4;background:var(--paper)}
+  .tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:4;background:var(--paper)}
 }
 </style>
 
@@ -267,11 +272,11 @@ details.settings summary small{font-size:var(--t-sm);color:var(--ink-2)}
       <div class="lbl"><span>← руль влево</span><span class="acts"><button type="button" class="mini" id="center" title="Поставить колёса прямо">● центр</button><button type="button" class="mini" id="alignTg" aria-expanded="false" aria-controls="align" title="Развал, кастер и схождение числами">установка ✎</button></span><span>вправо →</span></div>
     </div>
     <div class="chips" aria-live="polite">
-      <label class="chip l edit" title="Угол левого колеса. Введи число и нажми Enter: + влево, − вправо"><span>левое колесо ✎</span><input id="kL" type="text" inputmode="decimal" autocomplete="off" aria-label="Угол левого колеса, градусы, плюс — влево"></label>
-      <label class="chip r edit" title="Угол правого колеса. Введи число и нажми Enter: + влево, − вправо"><span>правое колесо ✎</span><input id="kR" type="text" inputmode="decimal" autocomplete="off" aria-label="Угол правого колеса, градусы, плюс — влево"></label>
-      <label class="chip edit" title="Ход рейки от центра, мм. Введи число и нажми Enter: + влево, − вправо"><span>рейка, мм ✎</span><input id="kS" type="text" inputmode="decimal" autocomplete="off" aria-label="Ход рейки, мм, плюс — влево"></label>
-      <div class="chip m" title="Аккерман в текущем положении руля: 100 % — оба колеса катятся вокруг одной точки, 0 % — параллельно, «анти» — наружное колесо повёрнуто сильнее внутреннего"><span>Аккерман</span><b id="kA">—</b></div>
-      <div class="chip" title="Развал левого и правого колеса в текущем положении руля, °"><span>развал Л/П</span><b id="kC">—</b></div>
+      <label class="chip l edit" title="Угол левого колеса. Введи число и нажми Enter: + влево, − вправо"><span data-s="левое ✎">левое колесо ✎</span><input id="kL" type="text" inputmode="decimal" autocomplete="off" aria-label="Угол левого колеса, градусы, плюс — влево"></label>
+      <label class="chip r edit" title="Угол правого колеса. Введи число и нажми Enter: + влево, − вправо"><span data-s="правое ✎">правое колесо ✎</span><input id="kR" type="text" inputmode="decimal" autocomplete="off" aria-label="Угол правого колеса, градусы, плюс — влево"></label>
+      <label class="chip edit" title="Ход рейки от центра, мм. Введи число и нажми Enter: + влево, − вправо"><span data-s="рейка ✎">рейка, мм ✎</span><input id="kS" type="text" inputmode="decimal" autocomplete="off" aria-label="Ход рейки, мм, плюс — влево"></label>
+      <div class="chip m" title="Аккерман в текущем положении руля: 100 % — оба колеса катятся вокруг одной точки, 0 % — параллельно, «анти» — наружное колесо повёрнуто сильнее внутреннего"><span data-s="Аккерман">Аккерман</span><b id="kA">—</b></div>
+      <div class="chip" title="Развал левого и правого колеса в текущем положении руля, °"><span data-s="развал">развал Л/П</span><b id="kC">—</b></div>
     </div>
     <div class="align" id="align">
       <span class="ttl">Установка, руль прямо ✎</span>
@@ -1013,7 +1018,7 @@ function ctlHTML(id){
     <span class="stepper" role="group" aria-label="${c.n}, ${c.u}"><button type="button" data-step="-1" aria-label="меньше на ${c.step} ${c.u}" title="−${c.step} ${c.u}">−</button><input type="number" id="c_${id}" step="${c.step}" min="${c.min}" max="${c.max}" aria-label="${c.n}, ${c.u}"><i aria-hidden="true">${c.u}</i><button type="button" data-step="1" aria-label="больше на ${c.step} ${c.u}" title="+${c.step} ${c.u}">+</button></span></div>
     <input type="range" id="r_${id}" min="${c.min}" max="${c.max}" step="${c.step}" aria-label="${c.n}, ${c.u}">
     <div class="scale" aria-hidden="true"><span>${sg(c.min)}</span><span>${sg(c.max)} ${c.u}</span></div>
-    <p>${c.h}</p><button type="button" class="undo" hidden title="Вернуть это значение как на чертеже">↺ как на чертеже</button></div>`;
+    <p>${c.h}</p><button type="button" class="undo" hidden title="${id==="troDY"?"Вернуть к параллельному рулю (0)":"Вернуть это значение как на чертеже"}">${id==="troDY"?"↺ параллельный руль":"↺ как на чертеже"}</button></div>`;
 }
 function renderPanel(){
   const t=TABS.find(x=>x.id===TAB);
@@ -1168,6 +1173,7 @@ $("#alignTg").addEventListener("click",()=>{const w=$(".wheel"),o=w.classList.to
 // the tabs stick just under the steering strip, whatever its height is right now
 function setStrip(){document.documentElement.style.setProperty("--strip",$(".wheel").offsetHeight+"px");}
 window.addEventListener("resize",setStrip);setStrip();
+if(window.ResizeObserver)new ResizeObserver(setStrip).observe($(".wheel")); // fonts load late and the bar can fold/unfold
 // type a wheel angle: find the rack position that gives it (sweep bracket, then secant on the exact solve)
 function steerTo(k,target){
   const pts=RES.sw.filter(ok).map(q=>[q.s,q[k].del]);

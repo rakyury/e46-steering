@@ -276,7 +276,15 @@ test.describe("phone", () => {
       expect(o.sw, t).toBeLessThanOrEqual(o.cw);
     }
     const strip = await page.evaluate(() => document.querySelector(".wheel").offsetHeight);
-    expect(strip).toBeLessThanOrEqual(175);
+    expect(strip).toBeLessThanOrEqual(150);
+    // the strip is a bottom bar on phones: fixed at the viewport bottom, and the page leaves room for it
+    const bar = await page.evaluate(() => { const r = document.querySelector(".wheel").getBoundingClientRect(); return { bottom: Math.round(r.bottom), vh: innerHeight, pad: parseFloat(getComputedStyle(document.body).paddingBottom) }; });
+    expect(bar.bottom).toBe(bar.vh);
+    expect(bar.pad).toBeGreaterThanOrEqual(strip - 1);
+    for (const id of ["#kL", "#kR", "#kS", "#kA", "#kC"]) {
+      const o = await page.$eval(id, el => ({ sw: el.scrollWidth, cw: el.clientWidth }));
+      expect(o.sw, id).toBeLessThanOrEqual(o.cw + 1);
+    }
     await expect(page.locator(".align")).toBeHidden();
     await page.click("#alignTg");
     await expect(page.locator(".align")).toBeVisible();
@@ -295,6 +303,14 @@ test.describe("phone", () => {
     await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: b.x + b.width / 2, y: b.y + b.height / 2 - 80 }] });
     await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
     expect(await page.evaluate(() => P.s)).toBe(s0);
+  });
+  test("a five-character stepper value is not clipped", async ({ page }) => {
+    await open(page, "ackermann");
+    await page.fill("#c_troDY", "-11.5"); await page.press("#c_troDY", "Tab");
+    await expect(page.locator("#c_troDY")).toHaveValue("-11.5");
+    const o = await page.$eval("#c_troDY", el => ({ sw: el.scrollWidth, cw: el.clientWidth }));
+    expect(o.sw).toBeLessThanOrEqual(o.cw);
+    await expect(page.locator("#k_troDY .undo")).toHaveText(/параллельный руль/);
   });
   test("touch targets are at least 36 px tall", async ({ page }) => {
     await open(page, "ackermann");
