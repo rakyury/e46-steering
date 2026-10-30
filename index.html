@@ -662,7 +662,13 @@ function wheel(F,m,col){
   const h=hull(ro.concat(ri).map(F.P));const c=F.ctx;
   c.beginPath();h.forEach((q,i)=>i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1]));c.closePath();
   c.fillStyle=C.fill;c.fill();c.strokeStyle=col;c.lineWidth=1.4;c.stroke();
-  const rim=ring(add(p.WC,mul(a,w*0.55)),216);polyline(F,rim.concat([rim[0]]),col,0.7,[3,3]);
+  // a turned wheel reads as a drum: the sidewall nearer the viewer (further forward, +X) is solid, the far one dashed,
+  // and the rim sits on the near side — so which way the wheel points is obvious at lock
+  const nearSign=a[0]>=0?1:-1,near=nearSign>0?ro:ri,far=nearSign>0?ri:ro;
+  polyline(F,far.concat([far[0]]),col,0.6,[2,3]);
+  polyline(F,near.concat([near[0]]),col,1.1);
+  const rim=ring(add(p.WC,mul(a,nearSign*w*0.55)),216);polyline(F,rim.concat([rim[0]]),col,0.8,[4,3]);
+  const hub=ring(add(p.WC,mul(a,nearSign*w*0.55)),60);polyline(F,hub.concat([hub[0]]),col,0.8);
 }
 function wheelPlan(F,m,col){ // plan-view footprint: flat rectangle along the wheel heading, camber ignored
   const w=m.p.WC,f=m.f,l=m.lat,c=F.ctx;
