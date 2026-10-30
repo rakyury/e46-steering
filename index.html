@@ -742,10 +742,14 @@ function drawSide(res,cur,big){
   // left column holds two enlarged details (trail at the ground, caster offset at the hub): at full scale they are a few pixels
   const iw=Math.round(Math.max(118,Math.min(250,cw*0.34)));
   const proj=q=>[-dot(sub(q,p.WC),f),q[2]];
-  const F=frame(cv,[-430,430,gz-60,700],proj,[iw,cw-iw]);
+  // the steer solve holds the body still, so a steered wheel's patch drops below static ground: draw the ground
+  // under the patch (the body is what rises) and say by how much
+  const gzw=m.CP[2];
+  const F=frame(cv,[-430,430,gz-90,700],proj,[iw,cw-iw]);
   const u0=(iw-F.S([0,0])[0])/F.sc;
-  ground(F,gz,u0+12/F.sc,430);
-  seg2(F,F.S([0,gz-50]),F.S([0,690]),C["ink-3"],0.8,CL);
+  ground(F,gzw,u0+12/F.sc,430);
+  if(m.jack>0.5)text(F,[F.W-8,F.S([0,gzw])[1]+22],`кузов поднят на ${m.jack.toFixed(1)} мм`,C["ink-2"],{size:12,align:"right"});
+  seg2(F,F.S([0,gzw-50]),F.S([0,690]),C["ink-3"],0.8,CL);
   wheel(F,m,C.red);
   const bodyTop=add(p.D,mul(p.u,150));seg(F,sub(p.D,mul(p.u,60)),bodyTop,C.ink,5.5);seg(F,bodyTop,p.T,C.ink,1.6);
   polyline(F,[p.LBJ,p.D,p.WC,p.TRO,p.LBJ],C["ink-2"],1);
@@ -790,7 +794,7 @@ function drawSide(res,cur,big){
     axisIn(D,cu,e);seg(D,p.WC,fWC,C.mark,2);mark(D,p.WC,C.red);mark(D,fWC,C.mark,3);
   },`кастер-офсет ${m.coff.toFixed(1)} мм`);
   detail(F.H-gap-ih,"А",[m.G,m.CP,fCP],(D,cu,e)=>{
-    ground(D,gz,cu[0]-e*3,cu[0]+e*3);
+    ground(D,gzw,cu[0]-e*3,cu[0]+e*3);
     seg2(D,D.P(m.CP),D.S([proj(m.CP)[0],cu[1]+e*3]),C["ink-3"],0.8,[4,3]);
     axisIn(D,cu,e);
     seg(D,m.CP,fCP,C.mark,2);mark(D,fCP,C.mark,3);
@@ -1217,6 +1221,8 @@ let start="ackermann";try{start=localStorage.getItem("e46tab")||start;}catch(e){
 const hsh=location.hash.slice(1);if(TABS.some(t=>t.id===hsh))start=hsh;
 if(!TABS.some(t=>t.id===start))start="ackermann";
 setTab(start);
+// a link with another #tab, or the browser's back button, switches tabs too
+window.addEventListener("hashchange",()=>{const h=location.hash.slice(1);if(h!==TAB&&TABS.some(t=>t.id===h))setTab(h);});
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(drawAll);
 new ResizeObserver(()=>schedule()).observe(document.querySelector(".stage"));
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change",drawAll);
