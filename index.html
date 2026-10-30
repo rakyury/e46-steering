@@ -734,10 +734,15 @@ function drawTop(res,cur,big){
 function drawFront(res,cur,big){
   // true front view (orthographic along X): heights are measured from the ground, so lowering the car moves the
   // body down and the ground stays put; a steered wheel foreshortens like a real one would
-  const gz=res.gz;
-  const F=frame($("#vFront canvas"),[-1160,1160,-60,880],p=>[p[1],p[2]-gz]);
+  // the solver holds the body still, so at lock the inner wheel's patch sits below static ground: on screen we put
+  // the ground through both contact patches instead, so the body is what lifts (and rolls a little), as in reality
+  const c1=cur.L.CP,c2=cur.R.CP,dy=c1[1]-c2[1],dz=c1[2]-c2[2]; // right patch → left patch, dy > 0
+  const ph=Math.atan2(dz,dy),cf=Math.cos(ph),sf=Math.sin(ph),um=(dy*cf+dz*sf)/2;
+  const F=frame($("#vFront canvas"),[-1160,1160,-60,880],p=>[(p[1]-c2[1])*cf+(p[2]-c2[2])*sf-um,-(p[1]-c2[1])*sf+(p[2]-c2[2])*cf]);
   ground(F,0,-1160,1160);
-  seg2(F,F.S([0,-40]),F.S([0,880]),C["ink-3"],0.8,CL);
+  seg(F,[0,0,res.gz-40],[0,0,res.gz+880],C["ink-3"],0.8,CL);
+  const lift=(cur.L.jack+cur.R.jack)/2;
+  if(lift>0.5)text(F,[F.S([0,0])[0],F.S([0,0])[1]+24],`кузов поднят на ${lift.toFixed(1)} мм`,C["ink-2"],{size:12,align:"center"});
   for(const [k,col] of [["L",C.red],["R",C.blue]])polyline(F,res.sw.map(r=>r&&!r.bad?r[k].CP:null),col,1.2,[2,3]);
   const rc=cur.rc;
   for(const [m,g,col] of [[cur.L,res.gL,C.red],[cur.R,res.gR,C.blue]]){
@@ -749,7 +754,7 @@ function drawFront(res,cur,big){
     const bodyTop=add(p.D,mul(p.u,150));seg(F,sub(p.D,mul(p.u,60)),bodyTop,C.ink,5.5);seg(F,bodyTop,p.T,C.ink,1.6);
     seg(F,m.G,add(p.T,mul(nrm(m.dir),70)),col,1,[12,3,2,3]);
     mark(F,p.LBJ,C.ink);mark(F,p.TRO,col);mark(F,p.T,C.ink);mark(F,g.AF,C.ink,3.5);mark(F,g.AR,C.ink,3.5);mark(F,g.plateC,C["ink-3"],3);
-    if(rc){const Rc=F.S([rc.y,rc.z-gz]),ic=m.p.side>0?rc.iL:rc.iR;seg2(F,F.P(m.CP),Rc,col,0.9,[5,3]);seg2(F,Rc,F.S([ic[1],ic[2]-gz]),col,0.6,[2,4]);}
+    if(rc){const Rc=F.P([0,rc.y,rc.z]),ic=m.p.side>0?rc.iL:rc.iR;seg2(F,F.P(m.CP),Rc,col,0.9,[5,3]);seg2(F,Rc,F.P([0,ic[1],ic[2]]),col,0.6,[2,4]);}
     const sd=p.side,wide=F.W>620;
     // camber label sits on the wheel itself (halo keeps it legible), KPI at the top mount: they cannot collide at any ride height
     text(F,F.P(add(p.WC,[0,0,R*0.62])),`${sd>0?"левое":"правое"}${wide?" · развал":""} ${fx(m.camber,2)}°`,col,{align:"center",size:14,w:600,clamp:true});
@@ -757,7 +762,7 @@ function drawFront(res,cur,big){
     const a=F.P(m.G),b=F.P(m.CP);if(big)dimH(F,a[0],b[0],a[1]+20,`скраб ${m.scrub.toFixed(0)}`,col);
   }
   seg(F,cur.L.p.TRI,cur.R.p.TRI,C.ink,6);
-  if(rc){const Rc=F.S([rc.y,rc.z-gz]);markXY(F,Rc[0],Rc[1],C.mark,6);
+  if(rc){const Rc=F.P([0,rc.y,rc.z]);markXY(F,Rc[0],Rc[1],C.mark,6);
     // label goes above the mark when the roll centre sits close to the ground hatch
     const below=Rc[1]+34<F.S([0,0])[1];
     text(F,[Rc[0],Rc[1]+(below?20:-18)],`центр крена ${fx(rc.h,0)} мм`,C["mark-ink"],{size:13.5,w:600,align:"center"});}
