@@ -62,8 +62,9 @@ test.describe("steering", () => {
     await open(page);
     await page.fill("#kR", "-30");
     await page.press("#kR", "Enter");
+    await expect.poll(async () => num(await page.inputValue("#kS"))).toBeCloseTo(-37.1, 0); // redraw happens on the next frame
     await expect.poll(async () => num(await page.inputValue("#kR"))).toBeCloseTo(-30, 1);
-    expect(num(await page.inputValue("#kS"))).toBeCloseTo(-36.85, 0);
+    expect(await page.evaluate(() => CUR.R.del)).toBeCloseTo(-30, 2);
     await page.fill("#kS", "20");
     await page.press("#kS", "Enter");
     await expect.poll(() => page.evaluate(() => P.s)).toBeCloseTo(20, 5);
