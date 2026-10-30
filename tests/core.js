@@ -13,7 +13,8 @@ function load(file = path.join(__dirname, "..", "index.html")) {
   if (a < 0 || b < 0) throw new Error("core markers not found in " + file);
   const src = html.slice(a, b) + `
     ;({add,sub,mul,dot,cross,len,nrm,my,DEG,rotvec,HP0,CAR0,DEF,plateFrame,resetP,resetHP,build,pose,residual,solve,
-       cpOf,sideMeas,icOf,lineX,rollCenter,ackermann,staticAck,compute,computeCurrent,metrics,
+       cpOf,sideMeas,icOf,lineX,rollCenter,ackermann,staticAck,compute,computeCurrent,metrics,calibrateAck0,
+       get ACK0(){return ACK0},set ACK0(v){ACK0=v},
        get P(){return P},set P(v){P=v},get HP(){return HP},get CAR(){return CAR},set CAR(v){CAR=v},get R(){return R}})`;
   const ctx = vm.createContext({ Math, console, document: { querySelector: () => null } });
   return vm.runInContext(src, ctx, { filename: "index.html(core)" });

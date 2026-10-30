@@ -137,6 +137,19 @@ describe("Ackermann", () => {
     const base = run().M.ackStatic;
     fresh(); near(run({ ride: -30, realign: false }).M.ackStatic, base, 4);
   });
+  test("calibrateAck0 finds the parallel-steer joint offset and makes the control's zero mean 0 %", () => {
+    const v = K.calibrateAck0();
+    near(v, -10.5, 0.3, "ACK0");
+    const r = run({ troDY: 0 });
+    near(r.M.ackStatic, 0, 1.5, "static Ackermann at control zero");
+    assert.ok(r.M.ackLock < 0, "slightly anti at lock with parallel centre");
+    K.ACK0 = 0;
+  });
+  test("solvable rack travel is reported and shrinks when the tie rod reaches its dead point", () => {
+    const a = run(); near(a.sLo, -60, 1e-9); near(a.sHi, 60, 1e-9);
+    fresh(); const b = run({ troDY: -30 });
+    assert.ok(b.M.stuck && b.sHi < 60 && b.sHi > 40, `sHi ${b.sHi}`);
+  });
   test("reported anti-Ackermann really means the outer wheel turns more", () => {
     const r = run({ troDY: -20 });
     const lk = r.sw[2 * N];

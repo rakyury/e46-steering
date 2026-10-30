@@ -46,14 +46,83 @@ test.describe("loads cleanly", () => {
   });
 });
 
+test.describe("defaults", () => {
+  test("opens straight ahead with parallel steer: 0 % static Ackermann at the control's zero", async ({ page }) => {
+    await open(page);
+    expect(await page.evaluate(() => P.s)).toBe(0);
+    expect(await page.textContent("#kA")).toBe("—");
+    expect(Math.abs(await page.evaluate(() => RES.M.ackStatic))).toBeLessThan(1.5);
+    await expect(page.locator("#c_troDY")).toHaveValue("0.0");
+    expect(await page.textContent("#k_troDY p")).toMatch(/По чертежу шарнир стоит на 10\.\d мм/);
+  });
+});
+
+test.describe("input robustness", () => {
+  test("Escape and garbage in a chip keep the current pose", async ({ page }) => {
+    await open(page);
+    await page.locator("#steer").fill("-38"); await page.locator("#steer").dispatchEvent("input");
+    await page.fill("#kL", "25"); await page.press("#kL", "Escape");
+    await page.waitForTimeout(100);
+    expect(await page.evaluate(() => P.s)).toBe(38);
+    await page.fill("#kS", "abc"); await page.press("#kS", "Enter");
+    await page.waitForTimeout(100);
+    expect(await page.evaluate(() => P.s)).toBe(38);
+    await expect.poll(() => page.inputValue("#kS")).toBe("38.0");
+  });
+  test("garbage in the alignment row changes nothing", async ({ page }) => {
+    await open(page);
+    const slot = await page.evaluate(() => P.slot), toe = await page.evaluate(() => P.toe);
+    await page.fill("#aCam", "abc"); await page.press("#aCam", "Enter");
+    await page.fill("#aToe", "x"); await page.press("#aToe", "Enter");
+    await page.waitForTimeout(100);
+    expect(await page.evaluate(() => P.slot)).toBe(slot);
+    expect(await page.evaluate(() => P.toe)).toBe(toe);
+  });
+  test("the slider cannot go past the solvable travel when the tie rod hits its dead point", async ({ page }) => {
+    await open(page, "ackermann");
+    await page.fill("#c_troDY", "-30"); await page.press("#c_troDY", "Tab");
+    await expect.poll(() => page.evaluate(() => RES.sHi)).toBeLessThan(60);
+    await page.evaluate(() => setS(60)); // a chip, the keyboard or play can still ask for full stroke
+    const o = await page.evaluate(() => ({ s: P.s, hi: RES.sHi, ok: CUR.ok, min: +document.querySelector("#steer").min }));
+    expect(o.s).toBeLessThanOrEqual(o.hi);
+    expect(o.ok).toBe(true);
+    expect(-o.min).toBeCloseTo(o.hi, 5);
+  });
+  test("camber via plate rotation converges instead of running away", async ({ page }) => {
+    await open(page, "camber");
+    await page.selectOption("#aCamVia", "plateA");
+    await page.fill("#aCam", "-4.5"); await page.press("#aCam", "Enter"); // the plate alone tops out near −4.1°, so −4.5° is reachable with caster held
+    await expect.poll(async () => num(await page.inputValue("#aCam"))).toBeCloseTo(-4.5, 1);
+    expect(num(await page.inputValue("#aCas"))).toBeCloseTo(4.77, 1);
+    expect(Math.abs(await page.evaluate(() => P.plateA))).toBeLessThan(179);
+    expect(await page.textContent("#aMsg")).toBe("");
+    // out of reach: settles on the closest value and says so, instead of jumping to ±180°
+    await page.fill("#aCam", "-2"); await page.press("#aCam", "Enter");
+    await expect.poll(() => page.textContent("#aMsg")).toContain("не хватает хода");
+    expect(Math.abs(await page.evaluate(() => P.plateA))).toBeLessThan(179);
+    expect(num(await page.inputValue("#aCam"))).toBeGreaterThan(-4.5);
+  });
+  test("delta table never shows an arrow between two equal printed values", async ({ page }) => {
+    await open(page, "caster");
+    await page.fill("#c_lbjDX", "0.5"); await page.press("#c_lbjDX", "Tab");
+    await page.waitForTimeout(150);
+    const rows = await page.$$eval("#dtab tr", trs => trs.map(tr => [...tr.children].map(td => td.textContent.trim())));
+    for (const [, v, dv] of rows) {
+      const m = v.match(/^(.+?) →\s*(.+?) /);
+      if (m) expect(m[1], v).not.toBe(m[2]); else expect(dv).toBe("=");
+    }
+  });
+});
+
 test.describe("steering", () => {
   test("slider turns the wheels, centre button straightens them", async ({ page }) => {
     await open(page);
     await page.locator("#steer").fill("-40"); // slider value = −rack, so −40 is a left turn of 40 mm
     await page.locator("#steer").dispatchEvent("input");
     await expect.poll(() => page.inputValue("#kS")).toBe("40.0");
-    expect(num(await page.inputValue("#kL"))).toBeGreaterThan(num(await page.inputValue("#kR")));
-    expect(num(await page.inputValue("#kL"))).toBeGreaterThan(25);
+    const kL = num(await page.inputValue("#kL")), kR = num(await page.inputValue("#kR"));
+    expect(kL).toBeGreaterThan(25); expect(kR).toBeGreaterThan(25);
+    expect(Math.abs(kL - kR)).toBeLessThan(3); // parallel steer by default: both wheels close together
     await page.click("#center");
     await expect.poll(() => page.inputValue("#kS")).toBe("0");
     expect(await page.textContent("#kA")).toBe("—");
@@ -62,9 +131,10 @@ test.describe("steering", () => {
     await open(page);
     await page.fill("#kR", "-30");
     await page.press("#kR", "Enter");
-    await expect.poll(async () => num(await page.inputValue("#kS"))).toBeCloseTo(-37.1, 0); // redraw happens on the next frame
+    await expect.poll(() => page.evaluate(() => CUR.R.del)).toBeCloseTo(-30, 2);
+    await expect.poll(async () => num(await page.inputValue("#kS"))).toBeCloseTo(await page.evaluate(() => P.s), 1); // redraw happens on the next frame
+    expect(await page.evaluate(() => P.s)).toBeLessThan(-30);
     await expect.poll(async () => num(await page.inputValue("#kR"))).toBeCloseTo(-30, 1);
-    expect(await page.evaluate(() => CUR.R.del)).toBeCloseTo(-30, 2);
     await page.fill("#kS", "20");
     await page.press("#kS", "Enter");
     await expect.poll(() => page.evaluate(() => P.s)).toBeCloseTo(20, 5);

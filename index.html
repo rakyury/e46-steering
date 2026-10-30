@@ -275,11 +275,11 @@ details.settings summary small{font-size:var(--t-sm);color:var(--ink-2)}
     </div>
     <div class="align" id="align">
       <span class="ttl">Установка, руль прямо ✎</span>
-      <label class="fld">развал <input id="aCam" type="text" inputmode="decimal" autocomplete="off"> °
+      <label class="fld">развал <input id="aCam" type="text" inputmode="decimal" autocomplete="off" aria-label="Развал стоя, градусы"> °
         <select id="aCamVia" aria-label="Чем выставлять развал"><option value="slot">слотом стакана</option><option value="plateA">поворотом плиты</option><option value="plateR">эксцентриситетом опоры</option><option value="lbjDY">шаровой в слоте</option></select></label>
-      <label class="fld">кастер <input id="aCas" type="text" inputmode="decimal" autocomplete="off"> °
+      <label class="fld">кастер <input id="aCas" type="text" inputmode="decimal" autocomplete="off" aria-label="Кастер, градусы"> °
         <select id="aCasVia" aria-label="Чем выставлять кастер"><option value="lolly">лолипопом</option><option value="plateA">поворотом плиты</option></select></label>
-      <label class="fld" title="Схождение на одно колесо, + в схождение. Тяга подбирается под это значение после любого изменения точек">схождение <input id="aToe" type="text" inputmode="decimal" autocomplete="off"> ° на колесо</label>
+      <label class="fld" title="Схождение на одно колесо, + в схождение. Тяга подбирается под это значение после любого изменения точек">схождение <input id="aToe" type="text" inputmode="decimal" autocomplete="off" aria-label="Схождение на колесо, градусы"> ° на колесо</label>
       <span class="amsg" id="aMsg" role="status"></span>
     </div>
   </div>
@@ -361,7 +361,8 @@ let HP={};const resetHP=()=>{for(const k in HP0)HP[k]=HP0[k].p.slice();};resetHP
 let CAR={...CAR0};
 
 // ───────── adjustable parameters
-const DEF={s:38,stroke:60,rackDX:0,rackDZ:0,troDX:0,troDY:0,troDZ:0,lbjDX:0,lbjDY:0,lolly:0,plateR:0,plateA:0,slot:0,ride:0,toe:0,wheelbase:2725,realign:false};
+let ACK0=0; // tie-rod joint offset (mm, outboard) at which the steering is parallel near centre; found by calibrateAck0()
+const DEF={s:0,stroke:60,rackDX:0,rackDZ:0,troDX:0,troDY:0,troDZ:0,lbjDX:0,lbjDY:0,lolly:0,plateR:0,plateA:0,slot:0,ride:0,toe:0,wheelbase:2725,realign:false};
 let P={};
 function plateFrame(){
   const u0=nrm(sub(HP.TOP,HP.DLOW));
@@ -390,7 +391,7 @@ function build(side){
     AF:HP.AF,AR:swing(HP.AR),T,
     LBJa:swing(HP.LBJ),
     LBJk:add(HP.LBJ,[P.lbjDX,P.lbjDY,0]),
-    TROk:add(HP.TRO,[P.troDX,P.troDY,P.troDZ]),
+    TROk:add(HP.TRO,[P.troDX,P.troDY+ACK0,P.troDZ]), // ACK0: the control's zero is parallel steer, not the drawing
     Dk,uk,WCk:HP.WC,ak:[0,Math.cos(c),-Math.sin(c)],
     TRI0:add(HP.TRI,[P.rackDX,0,P.rackDZ]),
     plateC:HP.PLATE.slice()
@@ -513,7 +514,7 @@ function staticAck(p){
 
 // ───────── full computation
 const N=80;
-function compute(){
+function compute(quick){ // quick: only the first few mm of a left turn, for calibration
   const gL=build(1),gR=build(-1);
   R=(HP.WC[2]-CAR.groundZ)/Math.cos(CAR.camber*DEG);
   const out={gL,gR,ok:true};
@@ -530,9 +531,9 @@ function compute(){
   out.kTrack=m0L.G[1]-m0R.G[1];
   out.stat=staticAck(pL0);
   const sw=new Array(2*N+1).fill(null);
-  for(const dirn of [1,-1]){
+  for(const dirn of (quick?[1]:[1,-1])){
     let qL=gL.q0,qR=gR.q0,alive=true;
-    for(let i=0;i<=N;i++){
+    for(let i=0;i<=(quick?12:N);i++){
       const s=dirn*P.stroke*i/N, idx=N+dirn*i;
       if(!alive){if(!sw[idx])sw[idx]={s,bad:true};continue;}
       const a=solve(gL,"steer",{s,th:gL.th0},qL),b=solve(gR,"steer",{s,th:gR.th0},qR);
@@ -544,6 +545,10 @@ function compute(){
     }
   }
   out.sw=sw;
+  if(quick)return out;
+  // solvable rack travel (the tie rod can reach its dead point before the stroke ends)
+  let lo=N,hi=N;while(hi<2*N&&sw[hi+1]&&!sw[hi+1].bad)hi++;while(lo>0&&sw[lo-1]&&!sw[lo-1].bad)lo--;
+  out.sLo=sw[lo].s;out.sHi=sw[hi].s;
   const bt=[];const zr=HP.WC[2]-P.ride;
   const travel=[];for(let t=0;t<=80;t+=4)travel.push(t);
   const runB=(list)=>{let a0=gL.q0,b0=gR.q0;for(const t of list){
@@ -586,6 +591,17 @@ function metrics(res){
     bump:b0&&b40?b40.toe-b0.toe:NaN, gain:b0&&b40?b40.camber-b0.camber:NaN,
     tie:res.gL.Ltie
   };
+}
+// the tie-rod joint offset at which the real steering is parallel near centre (0 % static Ackermann),
+// so that the control reads 0 there; bisection on quick sweeps, with the control itself at 0
+function calibrateAck0(){
+  const at4=r=>{for(let i=N+1;i<=N+12;i++){const a=r.sw[i-1]&&r.sw[i-1].ack,b=r.sw[i]&&r.sw[i].ack;if(a&&b&&a.di<=4&&b.di>=4)return a.ackD+(b.ackD-a.ackD)*(4-a.di)/(b.di-a.di);}return NaN;};
+  const save=P.troDY;P.troDY=0;
+  const f=v=>{ACK0=v;return at4(compute(true));};
+  let a=-30,b=30,fa=f(a),fb=f(b);
+  if(!isFinite(fa)||!isFinite(fb)||Math.sign(fa)===Math.sign(fb)){ACK0=0;P.troDY=save;return ACK0;}
+  for(let i=0;i<24;i++){const m=(a+b)/2,fm=f(m);if(!isFinite(fm))break;if(Math.sign(fm)===Math.sign(fa)){a=m;fa=fm;}else b=m;}
+  ACK0=Math.round((a+b)/2*10)/10;P.troDY=save;return ACK0;
 }
 
 // ───────── drawing helpers
@@ -760,7 +776,7 @@ function drawSide(res,cur,big){
   const aV=-Math.PI/2,aA=Math.atan2(Ts[1]-Gs[1],Ts[0]-Gs[0]),c=F.ctx;
   c.beginPath();c.arc(Gs[0],Gs[1],rr,Math.min(aV,aA),Math.max(aV,aA));c.strokeStyle=C.red;c.lineWidth=1.4;c.stroke();
   const lx=Gs[0]+rr*Math.cos(Math.max(aV,aA)),ly=Gs[1]+rr*Math.sin(Math.max(aV,aA));
-  text(F,[Math.max(lx,Gs[0])+8,ly-4],`кастер ${m.caster.toFixed(2)}°`,C.red,{size:14,w:600});
+  text(F,[Math.max(lx,Gs[0])+8,ly-4],`кастер ${fx(m.caster,2)}°`,C.red,{size:14,w:600,clamp:true});
   mark(F,p.LBJ,C.ink);mark(F,p.T,C.ink);mark(F,p.TRO,C.red,3.5);
   // perpendicular feet on the axis, measured in the wheel plane
   const d2=nrm(add(mul(f,dot(m.dir,f)),[0,0,m.dir[2]]));
@@ -855,9 +871,10 @@ function chart(cv,o){
   ctx.strokeStyle=C.ink;ctx.lineWidth=1.2;ctx.strokeRect(m.l+0.5,m.t+0.5,pw,ph);
   ctx.font=`11.5px ${C.fn}`;ctx.fillStyle=C["ink-2"];
   ctx.textAlign="center";ctx.textBaseline="top";
-  for(let x=Math.ceil(x0/xs1)*xs1;x<=x1+1e-9;x+=xs1)ctx.fillText(+x.toFixed(6)+"",sx(x),m.t+ph+4);
+  const tick=v=>String(+v.toFixed(6)).replace("-","−");
+  for(let x=Math.ceil(x0/xs1)*xs1;x<=x1+1e-9;x+=xs1)ctx.fillText(tick(x),sx(x),m.t+ph+4);
   ctx.textAlign="right";ctx.textBaseline="middle";
-  for(let y=Math.ceil(y0/ys1)*ys1;y<=y1+1e-9;y+=ys1)ctx.fillText(+y.toFixed(6)+"",m.l-5,sy(y));
+  for(let y=Math.ceil(y0/ys1)*ys1;y<=y1+1e-9;y+=ys1)ctx.fillText(tick(y),m.l-5,sy(y));
   // axis titles get a paper halo so they stay legible over the grid and curves
   ctx.font=`italic 13px ${C.fl}`;ctx.lineWidth=4;ctx.strokeStyle=C.paper;ctx.lineJoin="round";ctx.fillStyle=C["ink-2"];
   ctx.textAlign="right";ctx.textBaseline="bottom";ctx.strokeText(o.xl,m.l+pw,H-1);ctx.fillText(o.xl,m.l+pw,H-1);
@@ -865,7 +882,7 @@ function chart(cv,o){
   cv._map={x0,x1,l:m.l,pw};
 }
 const ok=q=>q&&!q.bad;
-const fx=(v,d=1)=>isFinite(v)?(v<0?"−":"")+Math.abs(v).toFixed(d):"—";
+const fx=(v,d=1)=>{if(!isFinite(v))return "—";const a=Math.abs(v).toFixed(d);return (v<0&&+a!==0?"−":"")+a;}; // no "−0.0"
 // x for steering charts is "wheel left ← → right", i.e. minus rack position
 const CH=[
   {id:"c3",t:"Аккерман по углу поворота",xl:"угол внутреннего колеса, °",yl:"%",cur:"di",y0:0,minSpan:40,
@@ -908,12 +925,12 @@ const CH=[
   {id:"c9",t:"Высота центра крена",xl:"ход колёс, мм (+ сжатие)",yl:"от земли, мм",cur:"t",minSpan:20,
    lg:[["центр крена","mark"]],
    ser:r=>[{pts:r.bt.map(q=>q.rc?[q.t,q.rc.h]:null),c:C.mark,w:2.6}],dots:()=>[],
-   note:M=>`Стоя <b>${fx(M.rc,0)} мм</b> над землёй.`}
+   note:M=>`Стоя <b>${fx(Math.abs(M.rc),0)} мм</b> ${M.rc<-0.5?"ниже земли":"над землёй"}.`}
 ];
 function buildCharts(){
   const pool=$("#pool");
   for(const c of CH){const el=document.createElement("div");el.className="fig ch";el.id="w_"+c.id;
-    el.innerHTML=`<h3>${c.t}</h3><p class="note" id="n_${c.id}"></p><div class="lg">${c.lg.map(([n,col,d])=>`<span><i style="border-top-color:var(--${col});${d?"border-top-style:dashed":""}"></i>${n}</span>`).join("")}<span class="ghostlg"><i style="border-top-color:var(--ink-3);border-top-style:dashed"></i>база</span></div><canvas id="${c.id}" aria-label="${c.t}"></canvas>`;
+    el.innerHTML=`<h3>${c.t}</h3><p class="note" id="n_${c.id}"></p><div class="lg">${c.lg.map(([n,col,d])=>`<span><i style="border-top-color:var(--${col});${d?"border-top-style:dashed":""}"></i>${n}</span>`).join("")}<span class="ghostlg"><i style="border-top-color:var(--mark);border-top-style:dotted;border-top-width:3px"></i>база</span></div><canvas id="${c.id}" aria-label="${c.t}"></canvas>`;
     pool.appendChild(el);
     if(c.cur==="s"){const cv=el.querySelector("canvas");
       const pick=e=>{const mp=cv._map;if(!mp)return;const r=cv.getBoundingClientRect();const x=mp.x0+(e.clientX-r.left-mp.l)/mp.pw*(mp.x1-mp.x0);setS(Math.max(-P.stroke,Math.min(P.stroke,-x)));};
@@ -932,7 +949,8 @@ function buildCharts(){
 const CTL={
   rackDX:{n:"Рейка вперёд / назад",min:-80,max:80,step:1,u:"мм",h:"Вперёд — Аккерман на большом угле падает, назад — растёт. Тяни «рейку» на виде сверху."},
   troDX:{n:"Шарнир тяги на кулаке: вперёд",min:-40,max:40,step:0.5,u:"мм",h:"Короче плечо — больше угол на том же ходе рейки."},
-  troDY:{n:"Шарнир тяги на кулаке: наружу",min:-40,max:40,step:0.5,u:"мм",h:"Наружу — больше статического Аккермана, внутрь — к параллели и анти."},
+  troDY:{n:"Шарнир тяги на кулаке: наружу",min:-40,max:40,step:0.5,u:"мм",
+    get h(){return `0 — параллельный руль (0 % Аккермана у центра). Наружу — Аккерман растёт, внутрь — анти. По чертежу шарнир стоит на ${fx(-ACK0,1)} мм.`;}},
   lbjDX:{n:"Шаровая в слоте кулака: вперёд",min:-40,max:40,step:0.5,u:"мм",h:"Ось поворота на месте, колесо уходит назад — растёт трейл. Тяни «кулак» на виде слева."},
   lolly:{n:"Лолипоп: опора рычага наружу",min:-25,max:25,step:0.5,u:"мм",h:"Рычаг разворачивается, шаровая идёт вперёд — растут кастер и трейл."},
   plateA:{n:"Поворот развальной плиты",min:-180,max:180,step:1,u:"°",h:"0° — смещение вперёд, 90° — наружу. Наружу — меньше отриц. развала, назад — больше кастера."},
@@ -953,7 +971,7 @@ const TABS=[
    ctl:["lbjDX","lolly","plateA"],main:"vSide",rest:["w_c5","w_c6"],
    met:["caster","trail","mtrail","coff","trailOut","jack"]},
   {id:"camber",t:"Развал и KPI",sub:"опора, слот стакана",
-   lead:"<b>Развал</b> стоя и в повороте. Из-за кастера и KPI внутреннее колесо в повороте выпрямляется, а наружное заваливается сильнее.",
+   lead:"<b>Развал</b> стоя и в повороте. Из-за кастера и KPI внутреннее колесо в повороте выпрямляется и уходит в плюс; наружное сначала заваливается сильнее, а ближе к локу снова выпрямляется.",
    ctl:["plateR","plateA","slot","lbjDY"],main:"vFront",rest:["w_c2","w_c1"],
    met:["camber0","camberIn","camberOut","kpi","scrub","caster"]},
   {id:"ride",t:"Клиренс",sub:"крен и подруливание",
@@ -1012,14 +1030,14 @@ function renderPanel(){
     box.querySelector(".undo").addEventListener("click",()=>set(PDEF[id]));
   }
   $("#pin").addEventListener("click",()=>{BASE=RES;BASEP={...P};drawAll();});
-  $("#reset").addEventListener("click",()=>{stopPlay();resetHP();CAR={...CAR0};const s=P.s;resetP();P.s=s;PDEF={...P};fillSettings();syncCtl();recompute();BASE=RES;BASEP={...P};drawAll();});
+  $("#reset").addEventListener("click",()=>{stopPlay();resetHP();CAR={...CAR0};const s=P.s;resetP();calibrateAck0();P.s=s;PDEF={...P};fillSettings();syncCtl();recompute();BASE=RES;BASEP={...P};drawAll();});
   syncCtl();
 }
 function syncCtl(){
   for(const id in CTL){const r=$("#r_"+id);if(!r)continue;const c=CTL[id];
     r.value=P[id];$("#c_"+id).value=fmtStep(P[id],c.step);
     const mod=Math.abs(P[id]-PDEF[id])>1e-6;$("#k_"+id).classList.toggle("mod",mod);$("#k_"+id).querySelector(".undo").hidden=!mod;}
-  const st=$("#steer");st.min=-P.stroke;st.max=P.stroke;st.value=-P.s;
+  const st=$("#steer");st.min=-(RES?RES.sHi:P.stroke);st.max=-(RES?RES.sLo:P.stroke);st.value=-P.s;
 }
 function renderTabs(){
   $("#tabs").innerHTML=TABS.map(t=>`<button role="tab" id="tab_${t.id}" aria-selected="${t.id===TAB}"><b>${t.t}</b><span>${t.sub}</span></button>`).join("");
@@ -1050,18 +1068,18 @@ function fillSettings(){
   $("#hpt").innerHTML=`<tr><td></td><td class="num">X</td><td class="num">Y</td><td class="num">Z</td></tr>`+
     Object.entries(HP0).map(([k,v])=>`<tr class="${v.est?"est":""}"><td>${v.n}</td>${[0,1,2].map(i=>`<td><input type="number" step="0.1" id="hp_${k}_${i}" value="${HP[k][i]}" aria-label="${v.n} ${"XYZ"[i]}"></td>`).join("")}</tr>`).join("");
   for(const k in HP0)for(const i of [0,1,2])$(`#hp_${k}_${i}`).addEventListener("change",e=>{const v=+e.target.value;if(!isFinite(v))return;
-    HP[k][i]=v;if(k==="TOP"||k==="PLATE"||k==="DLOW"){const f=plateFrame();P.plateR=f.r0;P.plateA=f.a0;PDEF.plateR=f.r0;PDEF.plateA=f.a0;syncCtl();}recompute();});
+    HP[k][i]=v;if(k==="TOP"||k==="PLATE"||k==="DLOW"){const f=plateFrame();P.plateR=f.r0;P.plateA=f.a0;PDEF.plateR=f.r0;PDEF.plateA=f.a0;syncCtl();}calibrateAck0();renderPanel();recompute();});
 }
 
 // ───────── state and drawing orchestration
 let RES=null,BASE=null,BASEP=null,CUR=null,HOVER=null,pending=false;
-function recompute(){RES=compute();CUR=computeCurrent(RES);schedule();}
+function recompute(){RES=compute();const s=Math.max(RES.sLo,Math.min(RES.sHi,P.s));if(s!==P.s){P.s=s;}syncCtl();CUR=computeCurrent(RES);schedule();}
 function updateCurrent(){CUR=computeCurrent(RES);schedule();}
 function schedule(){if(pending)return;pending=true;requestAnimationFrame(()=>{pending=false;drawAll();});}
-function setS(v){P.s=v;syncCtl();updateCurrent();}
+function setS(v){P.s=Math.max(RES?RES.sLo:-P.stroke,Math.min(RES?RES.sHi:P.stroke,v));syncCtl();updateCurrent();} // never beyond the solvable travel
 function deltaTable(){
   const t=TABS.find(x=>x.id===TAB),M=RES.M,B=BASE.M;
-  $("#dtab").innerHTML=t.met.map(k=>{const d=MET[k],v=M[k],b=B[k],dv=v-b;const ch=isFinite(dv)&&Math.abs(dv)>=Math.pow(10,-d.d)/2;
+  $("#dtab").innerHTML=t.met.map(k=>{const d=MET[k],v=M[k],b=B[k],dv=+v.toFixed(d.d)-+b.toFixed(d.d);const ch=isFinite(dv)&&Math.abs(dv)>=Math.pow(10,-d.d)/2; // delta of the shown digits
     return `<tr><td>${d.n}</td><td class="v">${ch?`<s>${fx(b,d.d)} →</s> `:""}${fx(v,d.d)} ${d.u}</td><td class="dv ${ch?(dv>0?"up":"down"):""}">${ch?(dv>0?"▲ +":"▼ −")+Math.abs(dv).toFixed(d.d):"="}</td></tr>`;}).join("");
 }
 function stampRows(){
@@ -1071,7 +1089,7 @@ function stampRows(){
     ["Кастер-офсет, мм",fx(L.coff),fx(Rr.coff)],["Скраб, мм",fx(L.scrub),fx(Rr.scrub)],["Подъём передка, мм",fx(L.jack),fx(Rr.jack)]];
   let h=`<tr><th></th><th style="color:var(--red)">левое</th><th style="color:var(--blue)">правое</th></tr>`+rows.map(r=>`<tr><th>${r[0]}</th><td class="l">${r[1]}</td><td class="r">${r[2]}</td></tr>`).join("");
   h+=`<tr><th>Аккерман сейчас</th><td colspan="2">${a?`${fx(a.ackD,0)} % по пятнам · ${fx(a.ackC,0)} % классич.`:"— руль прямо"}</td></tr>`;
-  h+=`<tr><th>Центр крена сейчас</th><td colspan="2">${c.rc?`${fx(c.rc.h,0)} мм над землёй, ${Math.abs(c.rc.y)<0.5?"по центру":`${c.rc.y>0?"влево":"вправо"} ${Math.abs(c.rc.y).toFixed(0)} мм`}`:"—"}</td></tr>`;
+  h+=`<tr><th>Центр крена сейчас</th><td colspan="2">${c.rc?`${fx(Math.abs(c.rc.h),0)} мм ${c.rc.h<-0.5?"ниже земли":"над землёй"},${Math.abs(c.rc.y)<0.5?"по центру":`${c.rc.y>0?"влево":"вправо"} ${Math.abs(c.rc.y).toFixed(0)} мм`}`:"—"}</td></tr>`;
   h+=`<tr><th>Длина тяги</th><td colspan="2">${RES.gL.Ltie.toFixed(1)} мм · колея по осям поворота ${RES.kTrack.toFixed(0)} мм</td></tr>`;
   $("#stamp").innerHTML=h;
 }
@@ -1087,7 +1105,7 @@ function drawAll(){
   const xi=RES.stat.xInt,dx=xi==null?0:HP.WC[0]-xi;
   $("#nTop").innerHTML=`Статический Аккерман <b>${fx(M.ackStatic,0)} %</b>${M.ackStatic<-0.5?" — <b>анти</b>: наружное колесо поворачивает больше внутреннего":""}. `+
     `Оранжевые линии ${xi==null?"параллельны":dx>0?`сходятся в ${(dx/1000).toFixed(2)} м за передней осью`:`сходятся впереди, в ${(-dx/1000).toFixed(2)} м перед осью`}; 100 % — точно на задней оси (база ${(P.wheelbase/1000).toFixed(3)} м). Считается по реальным углам колёс у центра — с рейкой и наклоном тяг.`;
-  $("#nFront").innerHTML=`Развал стоя <b>${fx(M.camber0,2)}°</b>, KPI <b>${fx(M.kpi,1)}°</b>, скраб <b>${fx(M.scrub,0)} мм</b>, центр крена <b>${fx(M.rc,0)} мм</b> над землёй.`;
+  $("#nFront").innerHTML=`Развал стоя <b>${fx(M.camber0,2)}°</b>, KPI <b>${fx(M.kpi,1)}°</b>, скраб <b>${fx(M.scrub,0)} мм</b>, центр крена <b>${fx(Math.abs(M.rc),0)} мм</b> ${M.rc<-0.5?"ниже земли":"над землёй"}.`;
   $("#nSide").innerHTML=`Руль прямо: кастер <b>${fx(M.caster,2)}°</b>, трейл <b>${fx(M.trail)} мм</b>, мех. трейл <b>${fx(M.mtrail)} мм</b>, кастер-офсет <b>${fx(M.coff)} мм</b>.`+
     (Math.abs(CUR.L.del)>0.5?` Сейчас колесо повёрнуто на ${fx(Math.abs(CUR.L.del))}° — на виде кастер <b>${fx(CUR.L.caster,1)}°</b> и трейл <b>${fx(CUR.L.trail)} мм</b> в плоскости колеса.`:"");
   $("#nPlan").innerHTML=`Пунктир — перпендикуляры от пятен. При 100 % Аккермане обе линии сходятся в одной точке на задней оси.`;
@@ -1098,7 +1116,7 @@ function drawAll(){
     let series=c.ser(RES,{});const n=series.length;
     const dots=c.cur==="s"?c.dots(CUR):(c.cur==="di"&&CUR.ack&&CUR.s>0?c.dots(CUR):[]);
     series.forEach((s,i)=>{s.dot=dots[i];});
-    if(showGhost)series=c.ser(BASE,{ghost:true}).slice(0,1).map(s=>({...s,c:C["ink-3"],a:1,w:1.4,d:[4,3]})).concat(series);
+    if(showGhost)series=c.ser(BASE,{ghost:true}).slice(0,1).map(s=>({...s,c:C.mark,a:0.55,w:2.6,d:[1.5,4]})).concat(series); // dotted amber: unlike any reference line
     const cur=c.cur==="s"?-P.s:c.cur==="di"?(CUR.ack&&CUR.s>0?CUR.ack.di:null):0;
     chart($("#"+c.id),{series,xl:c.xl,yl:c.yl,cursor:cur,x:c.cur==="s"?[-P.stroke,P.stroke]:null,y0:c.y0,minSpan:c.minSpan});
     $("#n_"+c.id).innerHTML=c.note(M,BASE.M);
@@ -1170,16 +1188,20 @@ function staticAlign(){
   const m=sideMeas(p,cpOf(p)[2]);return {camber:m.camber,caster:m.caster,ok:al.ok&&ht.ok};
 }
 function fit(key,metric,target){
-  const c=CTL[key];let x0=P[key],f0=staticAlign()[metric]-target;if(Math.abs(f0)<1e-4)return true;
-  let x1=Math.max(c.min,Math.min(c.max,x0+(key==="plateA"?5:key==="slot"?0.3:3)));
-  for(let it=0;it<20;it++){P[key]=x1;const f1=staticAlign()[metric]-target;if(Math.abs(f1)<1e-4)return true;
-    const d=(f1-f0)/(x1-x0);if(!isFinite(d)||Math.abs(d)<1e-9)break;
-    let x2=x1-f1/d;x2=Math.max(c.min,Math.min(c.max,x2));if(Math.abs(x2-x1)<1e-7)break;x0=x1;f0=f1;x1=x2;}
-  return Math.abs(staticAlign()[metric]-target)<0.01;
+  // scan the adjuster's whole range, take the crossing nearest the current value, bisect it;
+  // with no crossing settle on the closest sample (a secant ran away over the camber-vs-plate maximum)
+  const c=CTL[key],x0=P[key],f=x=>{P[key]=x;return staticAlign()[metric]-target;};
+  if(Math.abs(f(x0))<1e-4)return true;
+  const n=32,xs=[],fs=[];for(let i=0;i<=n;i++){xs.push(c.min+(c.max-c.min)*i/n);fs.push(f(xs[i]));}
+  let best=null;for(let i=0;i<n;i++)if(isFinite(fs[i])&&isFinite(fs[i+1])&&Math.sign(fs[i])!==Math.sign(fs[i+1])){const d=Math.abs((xs[i]+xs[i+1])/2-x0);if(!best||d<best.d)best={i,d};}
+  if(!best){let k=0;for(let i=1;i<=n;i++)if(Math.abs(fs[i])<Math.abs(fs[k]))k=i;f(xs[k]);return false;}
+  let a=xs[best.i],b=xs[best.i+1],fa=fs[best.i];
+  for(let it=0;it<40;it++){const m=(a+b)/2,fm=f(m);if(Math.abs(fm)<1e-4){a=b=m;break;}if(Math.sign(fm)===Math.sign(fa)){a=m;fa=fm;}else b=m;}
+  return Math.abs(f((a+b)/2))<0.01;
 }
 function alignTo(cam,cas){
   const kc=$("#aCamVia").value,kk=$("#aCasVia").value;const msg=[];const save={...P};
-  if(kc===kk&&cam!=null&&cas!=null){msg.push("развал и кастер одной регулировкой не выставить — выбери разные");}
+  if(kc===kk&&cam!=null&&cas!=null){msg.push("развал и кастер одной регулировкой не выставить — ставлю только развал, для кастера выбери другую");}
   for(let it=0;it<6;it++){
     if(cam!=null)fit(kc,"camber",cam);
     if(cas!=null&&kk!==kc)fit(kk,"caster",cas);
@@ -1192,18 +1214,18 @@ function alignTo(cam,cas){
   $("#aMsg").textContent=msg.join(" · ");
   syncCtl();recompute();
 }
-const num=v=>+String(v).replace(/[−–]/g,"-").replace(",",".").replace(/[^0-9.+\-]/g,"");
+const num=v=>{const s=String(v).replace(/[−–]/g,"-").replace(",",".").replace(/[^0-9.+\-]/g,"");return /\d/.test(s)?+s:NaN;}; // garbage → NaN, never 0
 for(const [id,k] of [["#kL","L"],["#kR","R"]]){const el=$(id);
   el.addEventListener("focus",()=>el.select());
-  el.addEventListener("change",()=>{const v=num(el.value);if(isFinite(v)){stopPlay();el.blur();steerTo(k,v);}});
+  el.addEventListener("change",()=>{const v=num(el.value);if(isFinite(v)){stopPlay();el.blur();steerTo(k,v);}else{el.blur();drawAll();}});
   el.addEventListener("keydown",e=>{if(e.key==="Enter")el.blur();if(e.key==="Escape"){el.value="";el.blur();drawAll();}});}
 for(const [id,fn] of [["#aCam",v=>alignTo(v,RES.M.caster)],["#aCas",v=>alignTo(RES.M.camber0,v)],
   ["#aToe",v=>{P.toe=Math.max(-3,Math.min(3,v));PDEF.toe=P.toe;$("#aMsg").textContent="";syncCtl();recompute();}]]){
   const el=$(id);el.addEventListener("focus",()=>el.select());
-  el.addEventListener("change",()=>{const v=num(el.value);if(isFinite(v)&&el.value.trim()!==""){stopPlay();fn(v);}});
+  el.addEventListener("change",()=>{const v=num(el.value);if(isFinite(v)){stopPlay();fn(v);}else{el.blur();drawAll();}});
   el.addEventListener("keydown",e=>{if(e.key==="Enter")el.blur();if(e.key==="Escape"){el.value="";el.blur();drawAll();}});}
 {const el=$("#kS");el.addEventListener("focus",()=>el.select());
-  el.addEventListener("change",()=>{const v=num(el.value);if(isFinite(v)){stopPlay();setS(Math.max(-P.stroke,Math.min(P.stroke,v)));}});
+  el.addEventListener("change",()=>{const v=num(el.value);if(isFinite(v)){stopPlay();setS(v);}else{el.blur();drawAll();}});
   el.addEventListener("keydown",e=>{if(e.key==="Enter")el.blur();if(e.key==="Escape"){el.value="";el.blur();drawAll();}});}
 let playing=false,t0=0,raf=0;
 function startPlay(){playing=true;$("#play").innerHTML="❚❚<em> стоп</em>";const ph=Math.asin(Math.max(-1,Math.min(1,P.s/P.stroke)));t0=performance.now()-ph/(2*Math.PI)*6000;
@@ -1216,6 +1238,7 @@ document.addEventListener("keydown",e=>{if(e.target.closest("input,textarea,sele
 
 // ───────── boot
 buildCharts();renderTabs();fillSettings();
+calibrateAck0();
 RES=compute();CUR=computeCurrent(RES);BASE=RES;BASEP={...P};
 let start="ackermann";try{start=localStorage.getItem("e46tab")||start;}catch(e){}
 const hsh=location.hash.slice(1);if(TABS.some(t=>t.id===hsh))start=hsh;
