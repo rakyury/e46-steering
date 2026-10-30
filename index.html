@@ -168,7 +168,7 @@ canvas{display:block;width:100%;touch-action:pan-y}
 #vFront canvas{aspect-ratio:2.2/1}
 #vSide canvas{aspect-ratio:1.25/1}
 #vPlan canvas{aspect-ratio:1.1/1}
-.main #vSide canvas{aspect-ratio:1.6/1}
+.main #vSide canvas{aspect-ratio:1.45/1}
 .ch canvas{aspect-ratio:1.5/1}
 .drag-hint{font-size:13px;font-style:italic;color:var(--mark-ink);white-space:nowrap}
 
@@ -244,7 +244,7 @@ details.settings summary small{font-size:var(--t-sm);color:var(--ink-2)}
   .tabs button span{display:none}
   #vTop canvas{aspect-ratio:2/1} /* the drawing is 2.7:1; 1.6 left a blank band under it on phones */
   #vFront canvas{aspect-ratio:1.7/1}
-  .main #vSide canvas{aspect-ratio:1.3/1}
+  .main #vSide canvas{aspect-ratio:1.1/1}
   .ch canvas{aspect-ratio:1.7/1}
   .fig{padding:var(--s2) var(--s3) var(--s3)}
   .fig h3{font-size:var(--t-lg)}
@@ -323,7 +323,7 @@ details.settings summary small{font-size:var(--t-sm);color:var(--ink-2)}
     <div class="lg"><span><i style="border-top-color:var(--red)"></i>левое</span><span><i style="border-top-color:var(--blue)"></i>правое</span><span><i style="border-top-color:var(--mark)"></i>центр крена</span><span><i style="border-top-color:var(--ink-2)"></i>след пятна за весь поворот</span></div>
     <canvas aria-label="Вид спереди"></canvas></figure>
   <figure class="fig" id="vSide" style="margin:0"><div class="fig-h"><h3>Вид слева, левое колесо</h3><span class="drag-hint">◎ — тяни кулак вперёд-назад</span></div><p class="note" id="nSide"></p>
-    <div class="lg"><span><i style="border-top-color:var(--red)"></i>колесо и ось поворота</span><span><i style="border-top-color:var(--mark)"></i>А, Б — увеличенные выноски</span></div>
+    <div class="lg"><span><i style="border-top-color:var(--red);border-top-style:dashed"></i>ось поворота</span><span><i style="border-top-color:var(--mark)"></i>перпендикуляры к оси: мех. трейл, кастер-офсет</span><span><i style="border-top-color:var(--ink-3);border-top-style:dashed"></i>вертикаль</span></div>
     <canvas aria-label="Вид слева"></canvas></figure>
   <figure class="fig" id="vPlan" style="margin:0"><div class="fig-h"><h3>Схема поворота</h3></div><p class="note" id="nPlan"></p>
     <div class="lg"><span><i style="border-top-color:var(--red)"></i>левое</span><span><i style="border-top-color:var(--blue)"></i>правое</span><span><i style="border-top-color:var(--mark);border-top-style:dashed"></i>от наружного к центру внутреннего</span></div>
@@ -768,71 +768,50 @@ function drawFront(res,cur,big){
     text(F,[Rc[0],Rc[1]+(below?20:-18)],`центр крена ${fx(rc.h,0)} мм`,C["mark-ink"],{size:13.5,w:600,align:"center"});}
 }
 function drawSide(res,cur,big){
-  // true side view of the wheel: projected on the wheel's own plane (heading f × vertical), so a steered wheel stays a flat circle
-  const gz=res.gz,m=cur.L,p=m.p,f=m.f;
-  const cv=$("#vSide canvas"),cw=cv.getBoundingClientRect().width;
-  // left column holds two enlarged details (trail at the ground, caster offset at the hub): at full scale they are a few pixels
-  const iw=Math.round(Math.max(118,Math.min(250,cw*0.34)));
-  // heights are measured from this wheel's contact patch: the ground stays put on screen while the body moves
-  // (lowering, or the lift a steered wheel gives the body)
-  const gzw=m.CP[2];
+  // side view of the left wheel in its own plane (heading × vertical), framed on the lower half of the wheel:
+  // trail and the offsets are tens of millimetres, so the sheet is scaled to show them and the strut top runs off it.
+  // Heights are measured from this wheel's contact patch, so the ground stays put and the body lifts.
+  const m=cur.L,p=m.p,f=m.f,gzw=m.CP[2];
   const proj=q=>[-dot(sub(q,p.WC),f),q[2]-gzw];
-  const F=frame(cv,[-430,430,-90,880],proj,[iw,cw-iw]);
-  const u0=(iw-F.S([0,0])[0])/F.sc;
-  ground(F,0,u0+12/F.sc,430);
-  if(m.jack>0.5)text(F,[F.W-8,F.S([0,0])[1]+22],`кузов поднят на ${m.jack.toFixed(1)} мм`,C["ink-2"],{size:12,align:"right"});
-  seg2(F,F.S([0,-50]),F.S([0,870]),C["ink-3"],0.8,CL);
+  const cv=$("#vSide canvas");
+  const F=frame(cv,[-250,250,-50,450],proj);
+  const c=F.ctx,wide=F.W>520;
+  ground(F,0,-1000,1000);
+  // wheel (cropped by the sheet), knuckle and the lower strut, kept light
   wheel(F,m,C.red);
-  const bodyTop=add(p.D,mul(p.u,150));seg(F,sub(p.D,mul(p.u,60)),bodyTop,C.ink,5.5);seg(F,bodyTop,p.T,C.ink,1.6);
   polyline(F,[p.LBJ,p.D,p.WC,p.TRO,p.LBJ],C["ink-2"],1);
-  const ax=nrm(m.dir),top=add(p.T,mul(ax,80));seg(F,m.G,top,C.red,1.2,[12,3,2,3]);
-  // caster: arc between the vertical and the steering axis, centred where the axis meets the ground
-  const Gs=F.P(m.G),Ts=F.P(top),rr=Math.hypot(Ts[0]-Gs[0],Ts[1]-Gs[1])*0.82;
-  seg2(F,Gs,[Gs[0],Gs[1]-rr-14],C["ink-3"],0.8,[4,3]);
-  const aV=-Math.PI/2,aA=Math.atan2(Ts[1]-Gs[1],Ts[0]-Gs[0]),c=F.ctx;
-  c.beginPath();c.arc(Gs[0],Gs[1],rr,Math.min(aV,aA),Math.max(aV,aA));c.strokeStyle=C.red;c.lineWidth=1.4;c.stroke();
-  const lx=Gs[0]+rr*Math.cos(Math.max(aV,aA)),ly=Gs[1]+rr*Math.sin(Math.max(aV,aA));
-  text(F,[Math.max(lx,Gs[0])+8,ly-4],`кастер ${fx(m.caster,2)}°`,C.red,{size:14,w:600,clamp:true});
-  mark(F,p.LBJ,C.ink);mark(F,p.T,C.ink);mark(F,p.TRO,C.red,3.5);
-  // perpendicular feet on the axis, measured in the wheel plane
+  seg(F,sub(p.D,mul(p.u,60)),add(p.D,mul(p.u,150)),C.ink,5);
+  mark(F,p.LBJ,C.ink);mark(F,p.TRO,C.red,3.5);
+  // steering axis through the whole sheet, and the vertical through the point where it meets the ground
+  const ax=nrm(m.dir);seg(F,add(m.G,mul(ax,-120)),add(m.G,mul(ax,1200)),C.red,1.8,[14,4,3,4]);
+  const Gs=F.P(m.G),topY=F.S([0,450])[1];
+  seg2(F,[Gs[0],Gs[1]+F.sc*40],[Gs[0],topY],C["ink-3"],1,[5,4]);
+  // caster: arc between the vertical and the axis, as high on the sheet as it fits
+  const A5=F.P(add(m.G,mul(ax,500)));
+  const rr=Gs[1]-F.S([0,395])[1],aV=-Math.PI/2,aA=Math.atan2(A5[1]-Gs[1],A5[0]-Gs[0]);
+  c.beginPath();c.arc(Gs[0],Gs[1],rr,Math.min(aV,aA),Math.max(aV,aA));c.strokeStyle=C.red;c.lineWidth=1.6;c.stroke();
+  // the arc label sits beside both lines (they are only a few degrees apart up here); the legend names the lines
+  const Ax=Gs[0]+rr*Math.cos(aA);
+  text(F,[Math.max(Gs[0],Ax)+14,Gs[1]-rr+4],`кастер ${fx(m.caster,2)}°`,C.red,{size:wide?15:13.5,w:600,align:"left",clamp:true});
+  // feet of the perpendiculars on the axis, measured in the wheel plane
   const d2=nrm(add(mul(f,dot(m.dir,f)),[0,0,m.dir[2]]));
   const foot=Q=>add(p.LBJ,mul(d2,dot(sub(Q,p.LBJ),f)*dot(d2,f)+(Q[2]-p.LBJ[2])*d2[2]));
   const fCP=foot(m.CP),fWC=foot(p.WC);
-  text(F,[iw+8,F.S([0,850])[1]],"← вперёд",C["ink-2"],{size:12});
+  // ground: axis entry point, contact patch, trail between them
+  const CPs=F.P(m.CP),gLeft=Gs[0]<CPs[0];
+  mark(F,m.G,C.ink,4.5);mark(F,m.CP,C.red,5);
+  dimH(F,Gs[0],CPs[0],Gs[1]+F.sc*22+8,`трейл ${fx(m.trail,1)}`,C.red);
+  text(F,[Gs[0]+(gLeft?-10:10),Gs[1]-6],"ось в землю",C["ink-2"],{size:11.5,align:gLeft?"right":"left",clamp:true});
+  text(F,[CPs[0]+(gLeft?10:-10),CPs[1]-6],"пятно",C.red,{size:11.5,align:gLeft?"left":"right",clamp:true});
+  // mechanical trail: perpendicular from the patch to the axis; its label sits above, clear of the ground labels
+  const a=F.P(fCP);seg(F,m.CP,fCP,C.mark,2.2);mark(F,fCP,C.mark,3);
+  text(F,[(a[0]+CPs[0])/2,Math.min(a[1],CPs[1])-30],`мех. трейл ${fx(m.mtrail,1)}`,C["mark-ink"],{size:wide?14:12.5,w:600,align:"center",clamp:true});
+  // caster offset: perpendicular from the wheel centre to the axis; label under the hub, the drag handle's label is above it
+  const b=F.P(fWC),Ws=F.P(p.WC);seg(F,p.WC,fWC,C.mark,2.2);mark(F,fWC,C.mark,3);
+  text(F,[Ws[0],Ws[1]+30],`кастер-офсет ${fx(m.coff,1)}`,C["mark-ink"],{size:wide?14:12.5,w:600,align:"center",clamp:true});
+  text(F,[10,topY+14],"← вперёд",C["ink-2"],{size:12});
+  if(m.jack>0.5)text(F,[F.W-8,Gs[1]+F.sc*22+30],`кузов поднят на ${m.jack.toFixed(1)} мм`,C["ink-2"],{size:12,align:"right"});
   if(big)handle(F,p.WC,"knuckle","кулак ↔","h");else mark(F,p.WC,C.red);
-  // details
-  const gap=6,ih=(F.H-3*gap)/2;
-  const detail=(y,letter,pts,draw,title)=>{
-    const uv=pts.map(proj),cu=[(Math.min(...uv.map(q=>q[0]))+Math.max(...uv.map(q=>q[0])))/2,(Math.min(...uv.map(q=>q[1]))+Math.max(...uv.map(q=>q[1])))/2];
-    const e=Math.max(42,...uv.map(q=>Math.max(Math.abs(q[0]-cu[0]),Math.abs(q[1]-cu[1]))+26));
-    const k=Math.min(iw-gap*2,ih)/2/e,x=gap,w=iw-gap*2;
-    const S=q=>[x+w/2+(q[0]-cu[0])*k,y+ih/2-(q[1]-cu[1])*k];
-    const D={ctx:c,W:F.W,H:F.H,sc:k,S,P:q=>S(proj(q)),proj,handles:[]};
-    // callout on the main view and leader to the box
-    const C0=F.S(cu),cr=Math.max(9,e*F.sc*0.75);
-    c.beginPath();c.arc(C0[0],C0[1],cr,0,2*Math.PI);c.strokeStyle=C.mark;c.lineWidth=1;c.setLineDash([3,2]);c.stroke();c.setLineDash([]);
-    seg2(F,[C0[0]-cr,C0[1]],[x+w,y+ih/2],C.mark,0.7,[2,3]);
-    text(F,[C0[0]-cr*0.75-6,C0[1]-cr*0.75-6],letter,C["mark-ink"],{size:14,w:700,align:"right"});
-    c.save();c.beginPath();c.rect(x,y,w,ih);c.clip();c.fillStyle=C.paper;c.fillRect(x,y,w,ih);
-    draw(D,cu,e);c.restore();
-    c.strokeStyle=C.mark;c.lineWidth=1.2;c.strokeRect(x+0.5,y+0.5,w-1,ih-1);
-    text(D,[x+7,y+11],`${letter} · ×${(k/F.sc).toFixed(0)}`,C["mark-ink"],{size:12.5,w:700});
-    if(title)text(D,[x+7,y+ih-10],title,C["mark-ink"],{size:12.5,w:600});
-  };
-  const k0=D=>D.sc*0.8;
-  const axisIn=(D,cu,e)=>seg(D,add(m.G,mul(ax,-e*3)),add(m.G,mul(ax,(cu[1]+gzw-m.G[2])/ax[2]+e*3)),C.red,1.3,[12,3,2,3]);
-  detail(gap,"Б",[p.WC,fWC],(D,cu,e)=>{
-    const w0=D.P(p.WC);seg2(D,[w0[0]-e*k0(D),w0[1]],[w0[0]+e*k0(D),w0[1]],C["ink-3"],0.8,CL);seg2(D,[w0[0],w0[1]-e*k0(D)],[w0[0],w0[1]+e*k0(D)],C["ink-3"],0.8,CL);
-    axisIn(D,cu,e);seg(D,p.WC,fWC,C.mark,2);mark(D,p.WC,C.red);mark(D,fWC,C.mark,3);
-  },`кастер-офсет ${m.coff.toFixed(1)} мм`);
-  detail(F.H-gap-ih,"А",[m.G,m.CP,fCP],(D,cu,e)=>{
-    ground(D,0,cu[0]-e*3,cu[0]+e*3);
-    seg2(D,D.P(m.CP),D.S([proj(m.CP)[0],cu[1]+e*3]),C["ink-3"],0.8,[4,3]);
-    axisIn(D,cu,e);
-    seg(D,m.CP,fCP,C.mark,2);mark(D,fCP,C.mark,3);
-    mark(D,m.CP,C.red,4.5);mark(D,m.G,C.ink,4);
-    const g=D.P(m.G),q=D.P(m.CP);dimH(D,g[0],q[0],g[1]-14,`трейл ${m.trail.toFixed(1)}`,C.red);
-  },`мех. трейл ${m.mtrail.toFixed(1)} мм`);
 }
 function drawPlan(res,cur){
   const L=P.wheelbase,x0=HP.WC[0],xr=x0-L;const a=cur.ack;
@@ -861,7 +840,7 @@ function drawPlan(res,cur){
 // ───────── charts on millimetre paper
 function nice(span,target){const raw=span/target,p=Math.pow(10,Math.floor(Math.log10(raw))),n=raw/p;return (n<1.5?1:n<3?2:n<7?5:10)*p;}
 function chart(cv,o){
-  const {ctx,W,H}=setup(cv);const m={l:46,r:10,t:8,b:30};
+  let {ctx,W,H}=setup(cv);const m={l:46,r:10,t:8,b:30};
   const pw=W-m.l-m.r,ph=H-m.t-m.b;
   let xs=[],ys=[];for(const s of o.series)for(const p of s.pts)if(p&&isFinite(p[0])&&isFinite(p[1])){xs.push(p[0]);ys.push(p[1]);}
   if(!xs.length)return;
@@ -871,6 +850,11 @@ function chart(cv,o){
   const pad=(y1-y0)*0.08;y0-=pad;y1+=pad;if(x1-x0<1e-9)x1=x0+1;
   const sx=x=>m.l+(x-x0)/(x1-x0)*pw, sy=y=>m.t+(y1-y)/(y1-y0)*ph;
   const xs1=nice(x1-x0,6),ys1=nice(y1-y0,5);
+  // grid, curves, frame and labels change only when the geometry does: they live on a cached layer,
+  // and each steering frame just blits it and draws the cursor (full redraws flickered on phones)
+  const key=`${o.key}|${W}x${H}|${C.paper}|${x0},${x1},${y0},${y1}`,live=ctx;
+  if(!cv._st||cv._st.key!==key){
+  const oc=document.createElement("canvas");oc.width=cv.width;oc.height=cv.height;ctx=oc.getContext("2d");ctx.setTransform(cv.width/W,0,0,cv.height/H,0,0);cv._st={key,oc};
   ctx.save();ctx.beginPath();ctx.rect(m.l,m.t,pw,ph);ctx.clip();
   for(const [st,col,w] of [[xs1/5,C.grid,0.6],[xs1,C["grid-major"],0.9]]){ctx.beginPath();for(let x=Math.ceil(x0/st)*st;x<=x1+1e-9;x+=st){const X=Math.round(sx(x))+0.5;ctx.moveTo(X,m.t);ctx.lineTo(X,m.t+ph);}ctx.strokeStyle=col;ctx.lineWidth=w;ctx.stroke();}
   for(const [st,col,w] of [[ys1/5,C.grid,0.6],[ys1,C["grid-major"],0.9]]){ctx.beginPath();for(let y=Math.ceil(y0/st)*st;y<=y1+1e-9;y+=st){const Y=Math.round(sy(y))+0.5;ctx.moveTo(m.l,Y);ctx.lineTo(m.l+pw,Y);}ctx.strokeStyle=col;ctx.lineWidth=w;ctx.stroke();}
@@ -881,8 +865,6 @@ function chart(cv,o){
     for(const p of s.pts){if(!p||!isFinite(p[1])){first=true;continue;}const X=sx(p[0]),Y=sy(p[1]);if(first){ctx.moveTo(X,Y);first=false;}else ctx.lineTo(X,Y);}
     ctx.strokeStyle=s.c;ctx.lineWidth=s.w||2;ctx.globalAlpha=s.a||1;ctx.setLineDash(s.d||[]);ctx.lineJoin="round";ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;
   }
-  if(o.cursor!=null&&isFinite(o.cursor)){const X=sx(o.cursor);ctx.beginPath();ctx.moveTo(X,m.t);ctx.lineTo(X,m.t+ph);ctx.strokeStyle=C.mark;ctx.lineWidth=1.4;ctx.stroke();
-    for(const s of o.series)if(s.dot!=null&&isFinite(s.dot)){ctx.beginPath();ctx.arc(X,sy(s.dot),4,0,2*Math.PI);ctx.fillStyle=s.c;ctx.fill();}}
   ctx.restore();
   ctx.strokeStyle=C.ink;ctx.lineWidth=1.2;ctx.strokeRect(m.l+0.5,m.t+0.5,pw,ph);
   ctx.font=`11.5px ${C.fn}`;ctx.fillStyle=C["ink-2"];
@@ -895,6 +877,12 @@ function chart(cv,o){
   ctx.font=`italic 13px ${C.fl}`;ctx.lineWidth=4;ctx.strokeStyle=C.paper;ctx.lineJoin="round";ctx.fillStyle=C["ink-2"];
   ctx.textAlign="right";ctx.textBaseline="bottom";ctx.strokeText(o.xl,m.l+pw,H-1);ctx.fillText(o.xl,m.l+pw,H-1);
   ctx.textAlign="left";ctx.textBaseline="top";ctx.strokeText(o.yl,m.l+5,m.t+3);ctx.fillText(o.yl,m.l+5,m.t+3);
+  }
+  ctx=live;ctx.drawImage(cv._st.oc,0,0,W,H);
+  if(o.cursor!=null&&isFinite(o.cursor)){ctx.save();ctx.beginPath();ctx.rect(m.l,m.t,pw,ph);ctx.clip();
+    const X=sx(o.cursor);ctx.beginPath();ctx.moveTo(X,m.t);ctx.lineTo(X,m.t+ph);ctx.strokeStyle=C.mark;ctx.lineWidth=1.4;ctx.stroke();
+    for(const s of o.series)if(s.dot!=null&&isFinite(s.dot)){ctx.beginPath();ctx.arc(X,sy(s.dot),4,0,2*Math.PI);ctx.fillStyle=s.c;ctx.fill();}
+    ctx.restore();}
   cv._map={x0,x1,l:m.l,pw};
 }
 const ok=q=>q&&!q.bad;
@@ -1045,7 +1033,7 @@ function renderPanel(){
     box.querySelectorAll("[data-step]").forEach(b=>b.addEventListener("click",()=>set(P[id]+(+b.dataset.step)*(+c.step))));
     box.querySelector(".undo").addEventListener("click",()=>set(PDEF[id]));
   }
-  $("#pin").addEventListener("click",()=>{BASE=RES;BASEP={...P};drawAll();});
+  $("#pin").addEventListener("click",()=>{BASE=RES;BASEP={...P};GEN++;drawAll();});
   $("#reset").addEventListener("click",()=>{stopPlay();resetHP();CAR={...CAR0};const s=P.s;resetP();calibrateAck0();P.s=s;PDEF={...P};fillSettings();syncCtl();recompute();BASE=RES;BASEP={...P};drawAll();});
   syncCtl();
 }
@@ -1089,7 +1077,8 @@ function fillSettings(){
 
 // ───────── state and drawing orchestration
 let RES=null,BASE=null,BASEP=null,CUR=null,HOVER=null,pending=false;
-function recompute(){RES=compute();const s=Math.max(RES.sLo,Math.min(RES.sHi,P.s));if(s!==P.s){P.s=s;}syncCtl();CUR=computeCurrent(RES);schedule();}
+let GEN=0; // bumps whenever the curves can change, so charts keep their static layer across steering frames
+function recompute(){GEN++;RES=compute();const s=Math.max(RES.sLo,Math.min(RES.sHi,P.s));if(s!==P.s){P.s=s;}syncCtl();CUR=computeCurrent(RES);schedule();}
 function updateCurrent(){CUR=computeCurrent(RES);schedule();}
 function schedule(){if(pending)return;pending=true;requestAnimationFrame(()=>{pending=false;drawAll();});}
 function setS(v){P.s=Math.max(RES?RES.sLo:-P.stroke,Math.min(RES?RES.sHi:P.stroke,v));syncCtl();updateCurrent();} // never beyond the solvable travel
@@ -1134,7 +1123,7 @@ function drawAll(){
     series.forEach((s,i)=>{s.dot=dots[i];});
     if(showGhost)series=c.ser(BASE,{ghost:true}).slice(0,1).map(s=>({...s,c:C.mark,a:0.55,w:2.6,d:[1.5,4]})).concat(series); // dotted amber: unlike any reference line
     const cur=c.cur==="s"?-P.s:c.cur==="di"?(CUR.ack&&CUR.s>0?CUR.ack.di:null):0;
-    chart($("#"+c.id),{series,xl:c.xl,yl:c.yl,cursor:cur,x:c.cur==="s"?[-P.stroke,P.stroke]:null,y0:c.y0,minSpan:c.minSpan});
+    chart($("#"+c.id),{series,xl:c.xl,yl:c.yl,cursor:cur,x:c.cur==="s"?[-P.stroke,P.stroke]:null,y0:c.y0,minSpan:c.minSpan,key:GEN});
     $("#n_"+c.id).innerHTML=c.note(M,BASE.M);
   }
   // top strip
