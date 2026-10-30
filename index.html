@@ -629,7 +629,7 @@ function markXY(F,x,y,col,r=4.5){ // quartered centre mark, like the drawing
   c.beginPath();c.moveTo(x,y);c.arc(x,y,r,0,Math.PI/2);c.closePath();c.moveTo(x,y);c.arc(x,y,r,Math.PI,1.5*Math.PI);c.closePath();
   c.fillStyle=col;c.fill();c.beginPath();c.arc(x,y,r,0,2*Math.PI);c.strokeStyle=col;c.lineWidth=1;c.stroke();}
 function mark(F,p,col,r){const [x,y]=F.P(p);markXY(F,x,y,col,r);}
-function text(F,xy,str,col,opt={}){const c=F.ctx;c.font=`${opt.it===false?"":"italic "}${opt.w||500} ${opt.size||13}px ${opt.num?C.fn:C.fl}`;
+function text(F,xy,str,col,opt={}){const c=F.ctx;str=String(str).replace(/-(?=\d)/g,"−");c.font=`${opt.it===false?"":"italic "}${opt.w||500} ${opt.size||13}px ${opt.num?C.fn:C.fl}`;
   c.fillStyle=col;c.textAlign=opt.align||"left";c.textBaseline=opt.base||"middle";
   let x=xy[0];
   if(opt.clamp&&F.W){ // keep the label inside the sheet on narrow canvases
