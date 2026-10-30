@@ -237,7 +237,7 @@ details.settings summary small{font-size:var(--t-sm);color:var(--ink-2)}
   .align{gap:var(--s1) var(--s3);font-size:14px}
   .tabs button{padding:8px 12px}
   .tabs button span{display:none}
-  #vTop canvas{aspect-ratio:1.6/1}
+  #vTop canvas{aspect-ratio:2/1} /* the drawing is 2.7:1; 1.6 left a blank band under it on phones */
   #vFront canvas{aspect-ratio:1.7/1}
   .main #vSide canvas{aspect-ratio:1.3/1}
   .ch canvas{aspect-ratio:1.7/1}
@@ -261,7 +261,7 @@ details.settings summary small{font-size:var(--t-sm);color:var(--ink-2)}
   </header>
 
   <div class="wheel">
-    <button class="play" id="play" title="Прокрутить руль от упора до упора · пробел" aria-label="Лок-ту-лок: прокрутить руль от упора до упора">▶<em> лок-ту-лок</em></button>
+    <button class="play" id="play" title="Прокрутить руль от упора до упора · пробел" aria-label="Лок-ту-лок: прокрутить руль от упора до упора">▶&#xFE0E;<em> лок-ту-лок</em></button>
     <div class="steer">
       <input type="range" id="steer" step="0.25" aria-label="Руль: влево — вправо" title="Тяни или нажимай ← → (с Shift — по 5 мм); двойной клик — центр">
       <div class="lbl"><span>← руль влево</span><span class="acts"><button type="button" class="mini" id="center" title="Поставить колёса прямо">● центр</button><button type="button" class="mini" id="alignTg" aria-expanded="false" aria-controls="align" title="Развал, кастер и схождение числами">установка ✎</button></span><span>вправо →</span></div>
@@ -1208,7 +1208,7 @@ for(const [id,fn] of [["#aCam",v=>alignTo(v,RES.M.caster)],["#aCas",v=>alignTo(R
 let playing=false,t0=0,raf=0;
 function startPlay(){playing=true;$("#play").innerHTML="❚❚<em> стоп</em>";const ph=Math.asin(Math.max(-1,Math.min(1,P.s/P.stroke)));t0=performance.now()-ph/(2*Math.PI)*6000;
   const step=t=>{if(!playing)return;P.s=P.stroke*Math.sin((t-t0)/6000*2*Math.PI);syncCtl();CUR=computeCurrent(RES);drawAll();raf=requestAnimationFrame(step);};raf=requestAnimationFrame(step);}
-function stopPlay(){if(!playing)return;playing=false;cancelAnimationFrame(raf);$("#play").innerHTML="▶<em> лок-ту-лок</em>";}
+function stopPlay(){if(!playing)return;playing=false;cancelAnimationFrame(raf);$("#play").innerHTML="▶︎<em> лок-ту-лок</em>";} // FE0E: text glyph, not the iOS emoji
 $("#play").addEventListener("click",()=>playing?stopPlay():startPlay());
 document.addEventListener("keydown",e=>{if(e.target.closest("input,textarea,select"))return;
   if(e.key==="ArrowLeft"||e.key==="ArrowRight"){e.preventDefault();stopPlay();setS(Math.max(-P.stroke,Math.min(P.stroke,P.s+(e.key==="ArrowLeft"?1:-1)*(e.shiftKey?5:1))));}
