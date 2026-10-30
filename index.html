@@ -6,116 +6,128 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Sans+Extra+Condensed:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: a drafting sheet. Sticky steering strip on top, task tabs, then [adjustments | main view] and supporting graphs on millimetre paper. */
+/* Layout: a drafting sheet. Sticky steering strip on top (the primary control), task tabs, then [adjustments | main view] and supporting graphs on millimetre paper.
+   Spacing scale 4/8/12/16/24 (--s1..--s5), type scale 12/13.5/15/17/19 (--t-xs..--t-xl), 44px touch targets on coarse pointers. */
 :root{
   --paper:#edf0ea;      /* tracing paper, cool */
   --paper-2:#e1e6de;    /* panel tint */
   --ink:#1a2230;        /* drafting ink */
-  --ink-2:#56606e;      /* secondary ink */
-  --ink-3:#98a1a8;      /* construction lines */
+  --ink-2:#56606e;      /* secondary ink, 5.5:1 on paper */
+  --ink-3:#98a1a8;      /* construction lines only — never text */
   --grid:rgba(52,130,86,.13);
   --grid-major:rgba(52,130,86,.32);
   --red:#c0331b;        /* left wheel — red pencil */
   --blue:#2153a6;       /* right wheel — blue pencil */
-  --mark:#b97806;       /* amber marker: results, cursor, handles */
+  --mark:#b97806;       /* amber marker: cursor, handles, strokes */
+  --mark-ink:#8a5a05;   /* amber for text, 5.1:1 on paper */
   --fill:rgba(26,34,48,.06);
   --up:#2f7d4b; --down:#b2401f;
   --f-label:"Fira Sans Extra Condensed","Arial Narrow","Roboto Condensed",sans-serif;
   --f-num:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;
+  --t-xs:12px;--t-sm:13.5px;--t-md:15px;--t-lg:17px;--t-xl:19px;
+  --tap:44px;
+  --ring:2px solid var(--mark);
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --paper:#0d2645;--paper-2:#123159;--ink:#e3edf8;--ink-2:#a6bcd5;--ink-3:#56789e;
   --grid:rgba(150,200,255,.09);--grid-major:rgba(150,200,255,.22);
-  --red:#ff8d70;--blue:#7fd1ff;--mark:#ffd071;--fill:rgba(227,237,248,.07);--up:#8be0a4;--down:#ffab8f;color-scheme:dark}}
+  --red:#ff8d70;--blue:#7fd1ff;--mark:#ffd071;--mark-ink:#ffd071;--fill:rgba(227,237,248,.07);--up:#8be0a4;--down:#ffab8f;color-scheme:dark}}
 :root[data-theme="dark"]{
   --paper:#0d2645;--paper-2:#123159;--ink:#e3edf8;--ink-2:#a6bcd5;--ink-3:#56789e;
   --grid:rgba(150,200,255,.09);--grid-major:rgba(150,200,255,.22);
-  --red:#ff8d70;--blue:#7fd1ff;--mark:#ffd071;--fill:rgba(227,237,248,.07);--up:#8be0a4;--down:#ffab8f;color-scheme:dark}
+  --red:#ff8d70;--blue:#7fd1ff;--mark:#ffd071;--mark-ink:#ffd071;--fill:rgba(227,237,248,.07);--up:#8be0a4;--down:#ffab8f;color-scheme:dark}
 
 *{box-sizing:border-box}
 html,body{background:var(--paper)}
 body{color:var(--ink);font-family:var(--f-label);font-size:16px;line-height:1.35;
-  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 24px}
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:var(--s3) var(--s5)}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--paper)}
 .sheet{max-width:1680px;margin:0 auto;border:1.5px solid var(--ink);position:relative}
 .num,output,input[type=number]{font-family:var(--f-num);font-variant-numeric:tabular-nums}
-button{font:inherit;color:var(--ink);background:transparent;border:1.5px solid var(--ink);padding:5px 12px;cursor:pointer;border-radius:0}
+button{font:inherit;color:var(--ink);background:transparent;border:1.5px solid var(--ink);padding:5px 12px;cursor:pointer;border-radius:0;min-height:32px;white-space:nowrap;transition:background-color .12s}
 button:hover{background:var(--fill)}
-:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+:focus-visible{outline:var(--ring);outline-offset:2px}
+input[type=number]{-moz-appearance:textfield;appearance:textfield}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+input[type=text],input[type=number]{font-variant-numeric:tabular-nums}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
 
 /* title */
-.head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;padding:10px 16px 8px;border-bottom:1.5px solid var(--ink)}
-.head h1{margin:0;font-style:italic;font-weight:600;font-size:clamp(24px,3vw,38px);line-height:1}
-.head p{margin:0;font-size:14px;color:var(--ink-2);font-style:italic}
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:var(--s4);flex-wrap:wrap;padding:var(--s3) var(--s4) var(--s2);border-bottom:1.5px solid var(--ink)}
+.head h1{margin:0;font-style:italic;font-weight:600;font-size:clamp(24px,3vw,38px);line-height:1;text-wrap:balance}
+.head p{margin:0;font-size:var(--t-sm);color:var(--ink-2);font-style:italic}
 
-/* steering strip */
+/* steering strip — the primary control */
 .wheel{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);border-bottom:1.5px solid var(--ink);
-  display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px 18px;align-items:center;padding:10px 16px}
-.wheel .play{background:var(--ink);color:var(--paper);font-style:italic;min-width:132px}
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:var(--s2) var(--s4);align-items:center;padding:var(--s2) var(--s4)}
+.wheel .play{background:var(--ink);color:var(--paper);font-style:italic;min-width:132px;min-height:var(--tap);font-size:var(--t-lg);font-weight:500}
 .wheel .play:hover{background:var(--ink-2)}
 .steer{min-width:0}
-.steer .lbl{display:flex;justify-content:space-between;font-size:13px;color:var(--ink-2);font-style:italic;margin-top:-2px}
-.steer .lbl b{font-weight:500;color:var(--ink);font-style:normal;font-family:var(--f-num);font-size:12.5px}
-.chips{display:flex;gap:6px;flex-wrap:wrap}
-.chip{border:1px solid var(--ink-3);padding:3px 9px;display:grid;line-height:1.15;min-width:74px}
-.chip span{font-size:12px;color:var(--ink-2);font-style:italic}
-.chip b{font-family:var(--f-num);font-weight:500;font-size:16px}
-.chip.l b{color:var(--red)}.chip.r b{color:var(--blue)}.chip.m b{color:var(--mark)}
-.chip{width:98px;min-width:0}
-.chip span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.steer .lbl{display:flex;justify-content:space-between;align-items:center;gap:var(--s2);font-size:var(--t-sm);color:var(--ink-2);font-style:italic;margin-top:-2px}
+.steer .lbl .acts{display:flex;gap:var(--s2);align-items:center}
+.wheel .mini{padding:2px 10px;font-size:var(--t-sm);font-style:italic;min-height:28px}
+#alignTg{display:none}
+#alignTg[aria-expanded="true"]{background:var(--paper-2)}
+.chips{display:flex;gap:var(--s2);flex-wrap:wrap}
+.chip{border:1px solid var(--ink-3);padding:3px 9px 4px;display:grid;line-height:1.15;width:104px;min-width:0;align-content:center}
+.chip span{font-size:var(--t-xs);color:var(--ink-2);font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip b{font-family:var(--f-num);font-weight:500;font-size:16px;font-variant-numeric:tabular-nums}
+.chip.l b{color:var(--red)}.chip.r b{color:var(--blue)}.chip.m b{color:var(--mark-ink)}
 .chip.edit{cursor:text;border-color:var(--ink-2)}
 .chip.edit:hover{background:var(--fill)}
-.chip input{font-family:var(--f-num);font-weight:500;font-size:16px;width:100%;min-width:0;background:transparent;color:var(--ink);border:0;border-bottom:1px dashed var(--ink-3);padding:0}
+.chip input{font-family:var(--f-num);font-weight:500;font-size:16px;width:100%;min-width:0;background:transparent;color:var(--ink);border:0;border-bottom:1px dashed var(--ink-3);padding:0;border-radius:0}
 .chip.l input{color:var(--red)}.chip.r input{color:var(--blue)}
 .chip input:focus{outline:none;border-bottom:1.5px solid var(--mark)}
-.chip:focus-within{outline:2px solid var(--mark);outline-offset:1px}
-.wheel .mini{padding:2px 10px;font-size:13px;font-style:italic;margin-top:4px}
-#alignTg{display:none}
-.align{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 22px;border-top:1px dashed var(--ink-3);padding-top:8px;font-style:italic;font-size:15px}
-.align .ttl{font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2);font-style:normal}
-.align .fld{display:inline-flex;align-items:baseline;gap:6px;white-space:nowrap}
-.align input{width:64px;font-family:var(--f-num);font-size:15px;font-weight:500;text-align:right;background:transparent;color:var(--ink);border:0;border-bottom:1px dashed var(--ink-2);padding:1px 2px}
-.align input:focus{outline:none;border-bottom:1.5px solid var(--mark);background:var(--fill)}
-.align select{font:inherit;font-size:14px;font-style:italic;color:var(--ink-2);background:transparent;border:0;border-bottom:1px solid var(--ink-3);padding:1px 0;cursor:pointer}
+.chip:focus-within{outline:var(--ring);outline-offset:1px}
+.align{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--s1) var(--s5);border-top:1px dashed var(--ink-3);padding-top:var(--s2);font-style:italic;font-size:var(--t-md)}
+.align .ttl{font-size:var(--t-xs);font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2);font-style:normal}
+.align .fld{display:inline-flex;align-items:baseline;gap:6px;white-space:nowrap;min-height:28px}
+.align input{width:64px;font-family:var(--f-num);font-size:var(--t-md);font-weight:500;text-align:right;background:transparent;color:var(--ink);border:0;border-bottom:1px dashed var(--ink-2);padding:1px 2px;border-radius:0}
+.align input:focus-visible{outline:var(--ring);outline-offset:1px;border-bottom-style:solid;background:var(--fill)}
+.align select{font:inherit;font-size:var(--t-sm);font-style:italic;color:var(--ink-2);background:transparent;border:0;border-bottom:1px solid var(--ink-3);padding:1px 0;cursor:pointer;border-radius:0;max-width:100%}
 .align select option{background:var(--paper);color:var(--ink)}
-.align .amsg{font-size:13.5px;color:var(--mark)}
-.steer .lbl{align-items:center}
+.align .amsg{font-size:var(--t-sm);color:var(--mark-ink)}
 
 /* tabs */
-.tabs{display:flex;border-bottom:1.5px solid var(--ink);overflow-x:auto}
-.tabs button{border:0;border-right:1px solid var(--ink-3);padding:10px 18px 9px;text-align:left;display:grid;gap:1px;flex:0 0 auto;position:relative}
-.tabs button b{font-weight:600;font-style:italic;font-size:19px}
-.tabs button span{font-size:13px;color:var(--ink-2)}
+.tabs{display:flex;border-bottom:1.5px solid var(--ink);overflow-x:auto;scrollbar-width:thin}
+.tabs button{border:0;border-right:1px solid var(--ink-3);padding:10px 18px 9px;text-align:left;display:grid;gap:1px;flex:0 0 auto;position:relative;min-height:var(--tap)}
+.tabs button b{font-weight:600;font-style:italic;font-size:var(--t-xl);line-height:1.1}
+.tabs button span{font-size:var(--t-sm);color:var(--ink-2)}
 .tabs button[aria-selected="true"]{background:var(--paper-2)}
 .tabs button[aria-selected="true"]::after{content:"";position:absolute;left:0;right:0;bottom:-1.5px;height:4px;background:var(--mark)}
+.tabs button:focus-visible{outline-offset:-3px}
 
 /* stage */
 .stage{display:grid;grid-template-columns:350px minmax(0,1fr);grid-template-areas:"panel main" "panel rest"}
-.panel{grid-area:panel;border-right:1.5px solid var(--ink);align-self:start;position:sticky;top:calc(env(safe-area-inset-top,0px) + 74px);max-height:calc(100vh - 80px);overflow:auto}
+.panel{grid-area:panel;border-right:1.5px solid var(--ink);align-self:start;position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--strip,118px));max-height:calc(100vh - var(--strip,118px) - 8px);overflow:auto}
 .main{grid-area:main;min-width:0;border-bottom:1px solid var(--ink-3)}
 .rest{grid-area:rest;min-width:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
 .rest > *{border-bottom:1px solid var(--ink-3);border-right:1px solid var(--ink-3);min-width:0}
 .rest > *:nth-child(2n){border-right:0}
 .rest > .wide{grid-column:1/-1;border-right:0}
-.lead{margin:0;padding:12px 16px;font-size:15.5px;border-bottom:1px solid var(--ink-3);background:var(--paper-2);max-width:60ch}
+.lead{margin:0;padding:var(--s3) var(--s4);font-size:var(--t-md);border-bottom:1px solid var(--ink-3);background:var(--paper-2);max-width:60ch;line-height:1.4}
 .lead b{font-weight:600}
 
 /* adjustment cards */
-.ctl{padding:10px 16px 12px;border-bottom:1px solid var(--ink-3)}
-.ctl.mod{background:linear-gradient(90deg,var(--mark) 0 3px,transparent 3px)}
-.ctl-h{display:flex;justify-content:space-between;align-items:center;gap:8px}
-.ctl-h label{font-size:17px;font-style:italic;font-weight:500}
-.stepper{display:flex;align-items:center;border:1px solid var(--ink-2)}
-.stepper button{border:0;width:30px;height:30px;padding:0;font-family:var(--f-num);font-size:17px;line-height:1}
-.stepper input{width:62px;border:0;border-left:1px solid var(--ink-3);border-right:1px solid var(--ink-3);background:transparent;color:var(--ink);text-align:center;font-size:14px;height:30px}
-.stepper i{font-style:normal;font-size:12px;color:var(--ink-2);padding:0 6px 0 4px;font-family:var(--f-num)}
-.ctl p{margin:4px 0 0;font-size:14px;color:var(--ink-2);line-height:1.3}
-.ctl .undo{border:0;padding:0;font-size:13px;font-style:italic;color:var(--mark);text-decoration:underline;text-underline-offset:3px;background:none;margin-top:4px}
-.ctl .chk{display:flex;gap:10px;align-items:flex-start;font-size:15px;font-style:italic;cursor:pointer}
-.ctl .chk input{margin-top:4px;accent-color:var(--red);width:16px;height:16px}
+.ctl{padding:var(--s3) var(--s4);border-bottom:1px solid var(--ink-3)}
+.ctl.mod{box-shadow:inset 3px 0 0 var(--mark)}
+.ctl-h{display:flex;justify-content:space-between;align-items:center;gap:var(--s2)}
+.ctl-h label{font-size:var(--t-lg);font-style:italic;font-weight:500;line-height:1.15}
+.stepper{display:flex;align-items:center;border:1px solid var(--ink-2);flex:0 0 auto}
+.stepper button{border:0;width:30px;height:32px;min-height:0;padding:0;font-family:var(--f-num);font-size:18px;line-height:1}
+.stepper input{width:58px;border:0;border-left:1px solid var(--ink-3);border-right:1px solid var(--ink-3);background:transparent;color:var(--ink);text-align:center;font-size:14px;height:32px;border-radius:0}
+.stepper input:focus-visible{outline-offset:-2px}
+.stepper i{font-style:normal;font-size:var(--t-xs);color:var(--ink-2);padding:0 6px 0 4px;font-family:var(--f-num)}
+.ctl .scale{display:flex;justify-content:space-between;font-family:var(--f-num);font-size:11px;color:var(--ink-2);margin-top:1px}
+.ctl p{margin:var(--s1) 0 0;font-size:var(--t-sm);color:var(--ink-2);line-height:1.35}
+.ctl .undo{border:0;padding:var(--s1) 0;min-height:0;font-size:var(--t-sm);font-style:italic;color:var(--mark-ink);text-decoration:underline;text-underline-offset:3px;background:none;margin-top:2px}
+.ctl .undo:hover{background:none;color:var(--ink)}
+.ctl .chk{display:flex;gap:10px;align-items:flex-start;font-size:var(--t-md);font-style:italic;cursor:pointer;min-height:32px}
+.ctl .chk input{margin-top:3px;accent-color:var(--red);width:18px;height:18px;flex:0 0 auto}
 
 /* range = scale ruler with a pointer */
-input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:26px;background:transparent;margin:4px 0 0;cursor:pointer}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:28px;background:transparent;margin:var(--s1) 0 0;cursor:pointer;border-radius:0}
 input[type=range]::-webkit-slider-runnable-track{height:12px;border-bottom:1.5px solid var(--ink);
   background:repeating-linear-gradient(90deg,var(--ink) 0 1px,transparent 1px 10%) bottom/100% 12px no-repeat,
              repeating-linear-gradient(90deg,var(--ink-3) 0 1px,transparent 1px 2%) bottom/100% 6px no-repeat}
@@ -124,30 +136,32 @@ input[type=range]::-moz-range-track{height:12px;border-bottom:1.5px solid var(--
              repeating-linear-gradient(90deg,var(--ink-3) 0 1px,transparent 1px 2%) bottom/100% 6px no-repeat}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:20px;margin-top:-6px;background:var(--red);clip-path:polygon(50% 100%,0 0,100% 0);border:0}
 input[type=range]::-moz-range-thumb{width:18px;height:20px;background:var(--red);clip-path:polygon(50% 100%,0 0,100% 0);border:0;border-radius:0}
-.wheel input[type=range]{height:34px}
-.wheel input[type=range]::-webkit-slider-thumb{width:24px;height:26px;margin-top:-10px;background:var(--mark)}
-.wheel input[type=range]::-moz-range-thumb{width:24px;height:26px;background:var(--mark)}
+.wheel input[type=range]{height:36px;margin:0}
+.wheel input[type=range]::-webkit-slider-thumb{width:26px;height:28px;margin-top:-12px;background:var(--mark)}
+.wheel input[type=range]::-moz-range-thumb{width:26px;height:28px;background:var(--mark)}
 
 /* change vs base */
-.delta{padding:12px 16px 14px;border-bottom:1px solid var(--ink-3)}
-.delta h2,.setgrp h2{margin:0 0 6px;font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2)}
+.delta{padding:var(--s3) var(--s4) var(--s4);border-bottom:1px solid var(--ink-3)}
+.delta h2,.setgrp h2{margin:0 0 6px;font-size:var(--t-xs);font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2)}
+.delta .sub{margin:0 0 var(--s2);font-size:var(--t-sm);color:var(--ink-2);font-style:italic}
 .delta table{width:100%;border-collapse:collapse}
 .delta td{padding:4px 0;border-bottom:1px solid var(--grid-major);vertical-align:baseline}
-.delta td:first-child{font-style:italic;font-size:15px;padding-right:6px}
-.delta td.v{font-family:var(--f-num);font-size:13.5px;text-align:right;white-space:nowrap}
-.delta td.v s{color:var(--ink-3);text-decoration:none}
-.delta td.dv{font-family:var(--f-num);font-size:12.5px;text-align:right;width:62px;white-space:nowrap;color:var(--ink-3)}
-.delta td.dv.up,.delta td.dv.down{color:var(--mark);font-weight:500}
-.delta .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.delta td:first-child{font-style:italic;font-size:var(--t-md);padding-right:6px}
+.delta td.v{font-family:var(--f-num);font-size:var(--t-sm);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.delta td.v s{color:var(--ink-2);text-decoration:none}
+.delta td.dv{font-family:var(--f-num);font-size:12.5px;text-align:right;width:62px;white-space:nowrap;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.delta td.dv.up,.delta td.dv.down{color:var(--mark-ink);font-weight:500}
+.delta .btns{display:flex;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s3)}
 .delta .btns button{font-size:14px;font-style:italic;padding:4px 10px}
 
 /* figures */
-.fig{padding:8px 14px 10px;position:relative}
-.fig h3{margin:0;font-style:italic;font-weight:500;font-size:19px}
-.fig .note{margin:1px 0 4px;font-size:14.5px;color:var(--ink-2)}
-.fig .note b{color:var(--ink);font-weight:600;font-family:var(--f-num);font-size:13.5px}
-.lg{display:flex;flex-wrap:wrap;gap:2px 12px;font-size:13px;color:var(--ink-2);margin:0 0 4px}
-.lg i{display:inline-block;width:18px;height:0;border-top:2px solid;vertical-align:middle;margin-right:4px}
+.fig{padding:var(--s3) var(--s4) var(--s3);position:relative}
+.fig-h{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s2) var(--s3);flex-wrap:wrap}
+.fig h3{margin:0;font-style:italic;font-weight:500;font-size:var(--t-xl);line-height:1.15}
+.fig .note{margin:2px 0 var(--s1);font-size:var(--t-sm);color:var(--ink-2);line-height:1.35}
+.fig .note b{color:var(--ink);font-weight:600;font-family:var(--f-num);font-size:13px}
+.lg{display:flex;flex-wrap:wrap;gap:2px var(--s3);font-size:13px;color:var(--ink-2);margin:0 0 var(--s1)}
+.lg i{display:inline-block;width:20px;height:0;border-top:2px solid;vertical-align:middle;margin-right:5px}
 /* pan-y: a vertical swipe over any drawing scrolls the page; horizontal drags steer or move handles */
 canvas{display:block;width:100%;touch-action:pan-y}
 #vTop canvas{aspect-ratio:2.3/1}
@@ -156,28 +170,30 @@ canvas{display:block;width:100%;touch-action:pan-y}
 #vPlan canvas{aspect-ratio:1.1/1}
 .main #vSide canvas{aspect-ratio:1.6/1}
 .ch canvas{aspect-ratio:1.5/1}
-.drag-hint{position:absolute;right:14px;top:10px;font-size:13px;font-style:italic;color:var(--mark)}
+.drag-hint{font-size:13px;font-style:italic;color:var(--mark-ink);white-space:nowrap}
 
-.stampt{width:100%;border-collapse:collapse;font-size:14px;margin-top:6px}
-.stampt td,.stampt th{border:1px solid var(--ink);padding:3px 7px;text-align:left;vertical-align:baseline}
+.stampt{width:100%;border-collapse:collapse;font-size:14px;margin-top:var(--s2)}
+.stampt td,.stampt th{border:1px solid var(--ink);padding:4px 8px;text-align:left;vertical-align:baseline}
 .stampt th{font-weight:500;font-style:italic;color:var(--ink-2)}
-.stampt td{font-family:var(--f-num);font-size:13px}
+.stampt td{font-family:var(--f-num);font-size:13px;font-variant-numeric:tabular-nums}
 .stampt td.l{color:var(--red)}.stampt td.r{color:var(--blue)}
 
 /* settings */
 details.settings{border-top:1.5px solid var(--ink)}
-details.settings summary{cursor:pointer;padding:12px 16px;font-style:italic;font-size:17px}
+details.settings summary{cursor:pointer;padding:var(--s3) var(--s4);font-style:italic;font-size:var(--t-lg);min-height:var(--tap);display:flex;align-items:center;gap:var(--s2)}
+details.settings summary small{font-size:var(--t-sm);color:var(--ink-2)}
 .setwrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:0;border-top:1px solid var(--ink-3)}
-.setgrp{padding:12px 16px;min-width:0}
+.setgrp{padding:var(--s3) var(--s4);min-width:0}
 .setgrp + .setgrp{border-left:1px solid var(--ink-3)}
-.setrow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid var(--grid-major);font-style:italic;font-size:15px}
-.setrow input{width:84px;background:transparent;border:0;border-bottom:1px solid var(--ink-2);color:var(--ink);font-size:13px;text-align:right}
+.setrow{display:flex;justify-content:space-between;align-items:center;gap:var(--s2);padding:4px 0;border-bottom:1px solid var(--grid-major);font-style:italic;font-size:var(--t-md)}
+.setrow input{width:84px;background:transparent;border:0;border-bottom:1px solid var(--ink-2);color:var(--ink);font-size:13px;text-align:right;min-height:28px;border-radius:0}
 .hpt{width:100%;border-collapse:collapse;font-size:13px}
 .hpt td{padding:2px;border-bottom:1px solid var(--grid-major)}
 .hpt td:first-child{font-style:italic;font-size:14.5px;padding-right:6px}
-.hpt input{width:64px;background:transparent;border:0;color:var(--ink);font-family:var(--f-num);font-size:12.5px;text-align:right}
+.hpt input{width:64px;background:transparent;border:0;border-bottom:1px solid transparent;color:var(--ink);font-family:var(--f-num);font-size:12.5px;text-align:right;min-height:26px;border-radius:0}
+.hpt input:hover{border-bottom-color:var(--ink-3)}
 .hpt tr.est td:first-child::after{content:" ≈";color:var(--red)}
-.setgrp p{font-size:13.5px;color:var(--ink-2);margin:8px 0 0;max-width:70ch}
+.setgrp p{font-size:var(--t-sm);color:var(--ink-2);margin:var(--s2) 0 0;max-width:70ch}
 .tblwrap{overflow-x:auto}
 
 @media (max-width:1380px){
@@ -190,43 +206,51 @@ details.settings summary{cursor:pointer;padding:12px 16px;font-style:italic;font
   .setwrap{grid-template-columns:minmax(0,1fr)}
   .setgrp + .setgrp{border-left:0;border-top:1px solid var(--ink-3)}
 }
+@media (pointer:coarse){
+  .drag-hint{display:none}
+  .stepper button{width:var(--tap);height:var(--tap)}.stepper input{height:var(--tap);font-size:15px}
+  input[type=range]{height:36px}
+  .wheel .mini{padding:5px 12px;font-size:14px;min-height:36px}
+  .ctl .undo{padding:var(--s2) 0}
+  .delta .btns button{padding:8px 12px;min-height:var(--tap)}
+  .tabs button{padding:9px 14px}
+  .chip{min-height:40px}
+  .ctl .chk input{width:22px;height:22px}
+}
 @media (max-width:640px){
   .rest{grid-template-columns:minmax(0,1fr)}
   .rest > *{border-right:0}
+  .head{padding:var(--s2) var(--s3)}
   .head p{display:none}
-  .wheel{grid-template-columns:auto minmax(0,1fr);gap:4px 10px;padding:6px 10px}
-  .wheel .play{min-width:0;padding:6px 10px}
+  .wheel{grid-template-columns:auto minmax(0,1fr);gap:2px var(--s2);padding:6px var(--s3)}
+  .wheel .play{min-width:var(--tap);width:var(--tap);padding:0;align-self:start}
   .wheel .play em{display:none}
-  .chips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
-  .chip{width:auto;min-width:0;padding:2px 5px}
-  .align{gap:4px 14px;font-size:14px}
-  .chip span{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .chip b{font-size:13px;white-space:nowrap}
-  .steer .lbl span:first-child,.steer .lbl span:last-child{display:none}
-  .steer .lbl{justify-content:center}
+  .wheel input[type=range]{height:var(--tap)}
+  .wheel input[type=range]::-webkit-slider-thumb{margin-top:-16px}
+  .steer .lbl{font-size:var(--t-xs);margin-top:0;justify-content:center}
+  .steer .lbl > span:first-child,.steer .lbl > span:last-child{display:none}
+  .wheel .mini,#alignTg{min-height:32px;padding:3px 10px;font-size:13px}
+  .chips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--s1)}
+  .chip{width:auto;min-width:0;padding:1px 6px 2px;min-height:0}
+  .chip span{font-size:11px}
+  .chip b,.chip input{font-size:14px;white-space:nowrap}
+  .align{gap:var(--s1) var(--s3);font-size:14px}
   .tabs button{padding:8px 12px}
   .tabs button span{display:none}
   #vTop canvas{aspect-ratio:1.6/1}
   #vFront canvas{aspect-ratio:1.7/1}
   .main #vSide canvas{aspect-ratio:1.3/1}
   .ch canvas{aspect-ratio:1.7/1}
-  .fig h3{font-size:17px}.fig .note{font-size:13.5px}
+  .fig{padding:var(--s2) var(--s3) var(--s3)}
+  .fig h3{font-size:var(--t-lg)}
+  .lead{padding:var(--s3)}
   /* alignment row folds away so the sticky strip leaves room for the drawings */
   .align{display:none}
   .wheel.open .align{display:flex}
   #alignTg{display:inline-block}
-  .ctl{padding:8px 12px 10px}
-  .delta{padding:10px 12px 12px}
+  .ctl{padding:var(--s2) var(--s3) var(--s3)}
+  .delta{padding:var(--s3)}
   .tabs{position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--strip,118px));z-index:4;background:var(--paper)}
-  .wheel .play{align-self:start;margin-top:2px}
-}
-@media (pointer:coarse){
-  .drag-hint{display:none}
-  .stepper button{width:38px;height:36px}.stepper input{height:36px;font-size:15px}
-  input[type=range]{height:30px}
-  .wheel .mini,#alignTg{padding:5px 12px;font-size:14px}
-  .delta .btns button{padding:7px 12px}
-  .tabs button{padding:9px 14px}
 }
 </style>
 
@@ -237,39 +261,39 @@ details.settings summary{cursor:pointer;padding:12px 16px;font-style:italic;font
   </header>
 
   <div class="wheel">
-    <button class="play" id="play">▶<em> лок-ту-лок</em></button>
+    <button class="play" id="play" title="Прокрутить руль от упора до упора · пробел" aria-label="Лок-ту-лок: прокрутить руль от упора до упора">▶<em> лок-ту-лок</em></button>
     <div class="steer">
-      <input type="range" id="steer" step="0.25" aria-label="Руль: влево — вправо">
-      <div class="lbl"><span>← руль влево</span><span style="display:flex;gap:6px"><button type="button" class="mini" id="center" title="Колёса прямо">● центр</button><button type="button" class="mini" id="alignTg" aria-expanded="false">установка ✎</button></span><span>вправо →</span></div>
+      <input type="range" id="steer" step="0.25" aria-label="Руль: влево — вправо" title="Тяни или нажимай ← → (с Shift — по 5 мм); двойной клик — центр">
+      <div class="lbl"><span>← руль влево</span><span class="acts"><button type="button" class="mini" id="center" title="Поставить колёса прямо">● центр</button><button type="button" class="mini" id="alignTg" aria-expanded="false" aria-controls="align" title="Развал, кастер и схождение числами">установка ✎</button></span><span>вправо →</span></div>
     </div>
     <div class="chips" aria-live="polite">
-      <label class="chip l edit" title="Введи угол колеса и нажми Enter: + влево, − вправо"><span>левое колесо ✎</span><input id="kL" type="text" inputmode="decimal" autocomplete="off" aria-label="Угол левого колеса, градусы, плюс — влево"></label>
-      <label class="chip r edit" title="Введи угол колеса и нажми Enter: + влево, − вправо"><span>правое колесо ✎</span><input id="kR" type="text" inputmode="decimal" autocomplete="off" aria-label="Угол правого колеса, градусы, плюс — влево"></label>
-      <label class="chip edit" title="Ход рейки от центра, мм: + влево, − вправо"><span>рейка, мм ✎</span><input id="kS" type="text" inputmode="decimal" autocomplete="off" aria-label="Ход рейки, мм, плюс — влево"></label>
-      <div class="chip m"><span>Аккерман</span><b id="kA">—</b></div>
-      <div class="chip"><span>развал Л/П</span><b id="kC">—</b></div>
+      <label class="chip l edit" title="Угол левого колеса. Введи число и нажми Enter: + влево, − вправо"><span>левое колесо ✎</span><input id="kL" type="text" inputmode="decimal" autocomplete="off" aria-label="Угол левого колеса, градусы, плюс — влево"></label>
+      <label class="chip r edit" title="Угол правого колеса. Введи число и нажми Enter: + влево, − вправо"><span>правое колесо ✎</span><input id="kR" type="text" inputmode="decimal" autocomplete="off" aria-label="Угол правого колеса, градусы, плюс — влево"></label>
+      <label class="chip edit" title="Ход рейки от центра, мм. Введи число и нажми Enter: + влево, − вправо"><span>рейка, мм ✎</span><input id="kS" type="text" inputmode="decimal" autocomplete="off" aria-label="Ход рейки, мм, плюс — влево"></label>
+      <div class="chip m" title="Аккерман в текущем положении руля: 100 % — оба колеса катятся вокруг одной точки, 0 % — параллельно, «анти» — наружное колесо повёрнуто сильнее внутреннего"><span>Аккерман</span><b id="kA">—</b></div>
+      <div class="chip" title="Развал левого и правого колеса в текущем положении руля, °"><span>развал Л/П</span><b id="kC">—</b></div>
     </div>
-    <div class="align">
+    <div class="align" id="align">
       <span class="ttl">Установка, руль прямо ✎</span>
       <label class="fld">развал <input id="aCam" type="text" inputmode="decimal" autocomplete="off"> °
         <select id="aCamVia" aria-label="Чем выставлять развал"><option value="slot">слотом стакана</option><option value="plateA">поворотом плиты</option><option value="plateR">эксцентриситетом опоры</option><option value="lbjDY">шаровой в слоте</option></select></label>
       <label class="fld">кастер <input id="aCas" type="text" inputmode="decimal" autocomplete="off"> °
         <select id="aCasVia" aria-label="Чем выставлять кастер"><option value="lolly">лолипопом</option><option value="plateA">поворотом плиты</option></select></label>
-      <label class="fld">схождение <input id="aToe" type="text" inputmode="decimal" autocomplete="off"> ° на колесо</label>
+      <label class="fld" title="Схождение на одно колесо, + в схождение. Тяга подбирается под это значение после любого изменения точек">схождение <input id="aToe" type="text" inputmode="decimal" autocomplete="off"> ° на колесо</label>
       <span class="amsg" id="aMsg" role="status"></span>
     </div>
   </div>
 
   <nav class="tabs" role="tablist" id="tabs" aria-label="Задача"></nav>
 
-  <div class="stage">
+  <div class="stage" id="stage">
     <aside class="panel" id="panel" aria-label="Регулировки"></aside>
     <section class="main" id="main"></section>
     <section class="rest" id="rest"></section>
   </div>
 
   <details class="settings" id="settings">
-    <summary>Настройки модели: ход рейки, база, схождение, точки крепления</summary>
+    <summary>Настройки модели <small>ход рейки, база, схождение, точки крепления · для сверки с замерами</small></summary>
     <div class="setwrap">
       <div class="setgrp">
         <h2>Машина</h2>
@@ -287,17 +311,19 @@ details.settings summary{cursor:pointer;padding:12px 16px;font-style:italic;font
 
 <!-- figures live here and get moved into the stage per tab -->
 <div id="pool" hidden>
-  <figure class="fig" id="vTop" style="margin:0"><h3>Вид сверху</h3><p class="note" id="nTop"></p>
-    <div class="lg"><span><i style="border-top-color:var(--red)"></i>левое</span><span><i style="border-top-color:var(--blue)"></i>правое</span><span><i style="border-top-color:var(--mark);border-top-style:dashed"></i>линии статического Аккермана</span></div>
-    <canvas aria-label="Вид сверху"></canvas><span class="drag-hint">тяни ◎ мышью · Shift — точно</span></figure>
-  <figure class="fig" id="vFront" style="margin:0"><h3>Вид спереди</h3><p class="note" id="nFront"></p>
+  <figure class="fig" id="vTop" style="margin:0"><div class="fig-h"><h3>Вид сверху</h3><span class="drag-hint">◎ — тяни мышью · Shift — точнее</span></div><p class="note" id="nTop"></p>
+    <div class="lg"><span><i style="border-top-color:var(--red)"></i>левое</span><span><i style="border-top-color:var(--blue)"></i>правое</span><span><i style="border-top-color:var(--mark);border-top-style:dashed"></i>линии статического Аккермана</span><span><i style="border-top-color:var(--ink-3);border-top-style:dashed"></i>осевые</span></div>
+    <canvas aria-label="Вид сверху"></canvas></figure>
+  <figure class="fig" id="vFront" style="margin:0"><div class="fig-h"><h3>Вид спереди</h3></div><p class="note" id="nFront"></p>
     <div class="lg"><span><i style="border-top-color:var(--red)"></i>левое</span><span><i style="border-top-color:var(--blue)"></i>правое</span><span><i style="border-top-color:var(--mark)"></i>центр крена</span><span><i style="border-top-color:var(--ink-2)"></i>след пятна за весь поворот</span></div>
     <canvas aria-label="Вид спереди"></canvas></figure>
-  <figure class="fig" id="vSide" style="margin:0"><h3>Вид слева, левое колесо</h3><p class="note" id="nSide"></p>
-    <canvas aria-label="Вид слева"></canvas><span class="drag-hint">тяни ◎ кулак вперёд-назад</span></figure>
-  <figure class="fig" id="vPlan" style="margin:0"><h3>Схема поворота</h3><p class="note" id="nPlan"></p>
+  <figure class="fig" id="vSide" style="margin:0"><div class="fig-h"><h3>Вид слева, левое колесо</h3><span class="drag-hint">◎ — тяни кулак вперёд-назад</span></div><p class="note" id="nSide"></p>
+    <div class="lg"><span><i style="border-top-color:var(--red)"></i>колесо и ось поворота</span><span><i style="border-top-color:var(--mark)"></i>А, Б — увеличенные выноски</span></div>
+    <canvas aria-label="Вид слева"></canvas></figure>
+  <figure class="fig" id="vPlan" style="margin:0"><div class="fig-h"><h3>Схема поворота</h3></div><p class="note" id="nPlan"></p>
+    <div class="lg"><span><i style="border-top-color:var(--red)"></i>левое</span><span><i style="border-top-color:var(--blue)"></i>правое</span><span><i style="border-top-color:var(--mark);border-top-style:dashed"></i>от наружного к центру внутреннего</span></div>
     <canvas aria-label="Схема поворота"></canvas></figure>
-  <div class="fig wide" id="vStamp"><h3>Все значения в текущем положении</h3><table class="stampt" id="stamp"></table></div>
+  <div class="fig wide" id="vStamp"><div class="fig-h"><h3>Все значения в текущем положении</h3></div><table class="stampt" id="stamp"></table></div>
 </div>
 
 <script>
@@ -565,7 +591,7 @@ function metrics(res){
 // ───────── drawing helpers
 let C={};
 function readTokens(){const cs=getComputedStyle(document.documentElement);
-  for(const k of ["paper","paper-2","ink","ink-2","ink-3","grid","grid-major","red","blue","mark","fill"])C[k]=cs.getPropertyValue("--"+k).trim();
+  for(const k of ["paper","paper-2","ink","ink-2","ink-3","grid","grid-major","red","blue","mark","mark-ink","fill"])C[k]=cs.getPropertyValue("--"+k).trim();
   C.fl=cs.getPropertyValue("--f-label").trim();C.fn=cs.getPropertyValue("--f-num").trim();}
 function setup(cv){const r=cv.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
   const w=Math.max(10,Math.round(r.width*dpr)),h=Math.max(10,Math.round(r.height*dpr));
@@ -589,15 +615,20 @@ function markXY(F,x,y,col,r=4.5){ // quartered centre mark, like the drawing
 function mark(F,p,col,r){const [x,y]=F.P(p);markXY(F,x,y,col,r);}
 function text(F,xy,str,col,opt={}){const c=F.ctx;c.font=`${opt.it===false?"":"italic "}${opt.w||500} ${opt.size||13}px ${opt.num?C.fn:C.fl}`;
   c.fillStyle=col;c.textAlign=opt.align||"left";c.textBaseline=opt.base||"middle";
-  if(opt.halo!==false){c.lineWidth=4;c.strokeStyle=C.paper;c.lineJoin="round";c.strokeText(str,xy[0],xy[1]);}
-  c.fillText(str,xy[0],xy[1]);}
+  let x=xy[0];
+  if(opt.clamp&&F.W){ // keep the label inside the sheet on narrow canvases
+    const w=c.measureText(str).width,al=c.textAlign,l=al==="center"?x-w/2:al==="right"?x-w:x,r=l+w,pad=4;
+    if(l<pad)x+=pad-l;else if(r>F.W-pad)x-=r-(F.W-pad);}
+  if(opt.halo!==false){c.lineWidth=4;c.strokeStyle=C.paper;c.lineJoin="round";c.strokeText(str,x,xy[1]);}
+  c.fillText(str,x,xy[1]);}
 function handle(F,p,kind,label,axes){ // draggable point
   const [x,y]=F.P(p),c=F.ctx;const hot=HOVER&&HOVER.F===F&&HOVER.kind===kind;
-  c.beginPath();c.arc(x,y,hot?13:11,0,2*Math.PI);c.strokeStyle=C.mark;c.lineWidth=2;c.setLineDash([3,2]);c.stroke();c.setLineDash([]);
+  c.beginPath();c.arc(x,y,hot?14:12,0,2*Math.PI);c.fillStyle=C.paper;c.globalAlpha=0.55;c.fill();c.globalAlpha=1;
+  c.strokeStyle=C.mark;c.lineWidth=hot?2.5:2;c.setLineDash([3,2]);c.stroke();c.setLineDash([]);
   c.beginPath();c.arc(x,y,3,0,2*Math.PI);c.fillStyle=C.mark;c.fill();
-  const arr=(dx,dy)=>{c.beginPath();c.moveTo(x+dx*19,y+dy*19);c.lineTo(x+dx*15-dy*3,y+dy*15+dx*3);c.lineTo(x+dx*15+dy*3,y+dy*15-dx*3);c.closePath();c.fillStyle=C.mark;c.fill();};
+  const arr=(dx,dy)=>{c.beginPath();c.moveTo(x+dx*20,y+dy*20);c.lineTo(x+dx*16-dy*3.5,y+dy*16+dx*3.5);c.lineTo(x+dx*16+dy*3.5,y+dy*16-dx*3.5);c.closePath();c.fillStyle=C.mark;c.fill();};
   if(axes.includes("v")){arr(0,-1);arr(0,1);}if(axes.includes("h")){arr(1,0);arr(-1,0);}
-  if(label)text(F,[x+20,y-14],label,C.mark,{size:13,w:600});
+  if(label)text(F,[x+22,y-15],label,C["mark-ink"],{size:13,w:600});
   F.handles.push({x,y,kind});}
 function hull(pts){pts=pts.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]);const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);
   const lo=[],up=[];for(const p of pts){while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0)lo.pop();lo.push(p);}
@@ -662,8 +693,10 @@ function drawTop(res,cur,big){
     seg(F,at(410),at(-470),C.mark,1.2,[6,4]);
   }
   const turn=Math.abs(P.s)>0.4?(P.s>0?"L":"R"):null;
-  for(const [m,col,k] of [[cur.L,C.red,"L"],[cur.R,C.blue,"R"]]){const a=F.P(add(m.p.WC,[370,0,0])),L=k==="L";
-    text(F,[a[0]+(L?-30:30),a[1]],`${Math.abs(m.del).toFixed(1)}°${turn?(turn===k?" внутр.":" наруж."):""}`,col,{align:L?"left":"right",num:true,size:14,it:false});}
+  // wheel angles sit in the empty bottom corners of the sheet, clear of the wheels and handles at any lock and any width
+  const wide=F.W>620;
+  for(const [m,col,k] of [[cur.L,C.red,"L"],[cur.R,C.blue,"R"]]){const L=k==="L",a=F.S([L?-1170:1170,-452]);
+    text(F,a,`${wide?(L?"левое ":"правое "):""}${Math.abs(m.del).toFixed(1)}°${turn?(turn===k?" внутр.":" наруж."):""}`,col,{align:L?"left":"right",num:true,size:wide?14:13,it:false,w:600,clamp:true});}
   text(F,F.S([0,385]),"↑ вперёд",C["ink-2"],{align:"center",size:12});
   if(big){
     const mid=mul(add(cur.L.p.TRI,cur.R.p.TRI),0.5);
@@ -691,14 +724,16 @@ function drawFront(res,cur,big){
     seg(W,m.G,add(p.T,mul(nrm(m.dir),70)),col,1,[12,3,2,3]);
     mark(W,p.LBJ,C.ink);mark(W,p.TRO,col);mark(W,p.T,C.ink);mark(F,g.AF,C.ink,3.5);mark(F,g.AR,C.ink,3.5);mark(F,g.plateC,C["ink-3"],3);
     if(rc){const Rc=F.S([rc.y,rc.z]),ic=m.p.side>0?rc.iL:rc.iR;seg2(F,W.P(m.CP),Rc,col,0.9,[5,3]);seg2(F,Rc,F.S([ic[1],ic[2]]),col,0.6,[2,4]);}
-    const sd=p.side,top=W.P(add(p.WC,[0,0,R+42]));
-    text(F,top,`${sd>0?"левое":"правое"} · развал ${m.camber.toFixed(2)}°`,col,{align:"center",size:14,w:600});
-    if(big)text(F,W.P(add(p.T,[0,sd*60,40])),`KPI ${m.kpi.toFixed(1)}°`,col,{align:sd>0?"left":"right",size:13});
+    const sd=p.side,top=W.P(add(p.WC,[0,0,R+42])),wide=F.W>620;
+    text(F,top,`${sd>0?"левое":"правое"}${wide?" · развал":""} ${m.camber.toFixed(2)}°`,col,{align:"center",size:14,w:600,clamp:true});
+    if(big)text(F,W.P(add(p.T,[0,sd*60,40])),`KPI ${m.kpi.toFixed(1)}°`,col,{align:sd>0?"left":"right",size:13,clamp:true});
     const a=W.P(m.G),b=W.P(m.CP);if(big)dimH(F,a[0],b[0],a[1]+20,`скраб ${m.scrub.toFixed(0)}`,col);
   }
   seg(F,cur.L.p.TRI,cur.R.p.TRI,C.ink,6);
   if(rc){const Rc=F.S([rc.y,rc.z]);markXY(F,Rc[0],Rc[1],C.mark,6);
-    text(F,[Rc[0],Rc[1]+20],`центр крена ${rc.h.toFixed(0)} мм`,C.mark,{size:13.5,w:600,align:"center"});}
+    // label goes above the mark when the roll centre sits close to the ground hatch
+    const below=Rc[1]+34<F.S([0,gz])[1];
+    text(F,[Rc[0],Rc[1]+(below?20:-18)],`центр крена ${rc.h.toFixed(0)} мм`,C["mark-ink"],{size:13.5,w:600,align:"center"});}
 }
 function drawSide(res,cur,big){
   // true side view of the wheel: projected on the wheel's own plane (heading f × vertical), so a steered wheel stays a flat circle
@@ -741,12 +776,12 @@ function drawSide(res,cur,big){
     const C0=F.S(cu),cr=Math.max(9,e*F.sc*0.75);
     c.beginPath();c.arc(C0[0],C0[1],cr,0,2*Math.PI);c.strokeStyle=C.mark;c.lineWidth=1;c.setLineDash([3,2]);c.stroke();c.setLineDash([]);
     seg2(F,[C0[0]-cr,C0[1]],[x+w,y+ih/2],C.mark,0.7,[2,3]);
-    text(F,[C0[0]-cr*0.75-6,C0[1]-cr*0.75-6],letter,C.mark,{size:14,w:700,align:"right"});
+    text(F,[C0[0]-cr*0.75-6,C0[1]-cr*0.75-6],letter,C["mark-ink"],{size:14,w:700,align:"right"});
     c.save();c.beginPath();c.rect(x,y,w,ih);c.clip();c.fillStyle=C.paper;c.fillRect(x,y,w,ih);
     draw(D,cu,e);c.restore();
     c.strokeStyle=C.mark;c.lineWidth=1.2;c.strokeRect(x+0.5,y+0.5,w-1,ih-1);
-    text(D,[x+7,y+11],`${letter} · ×${(k/F.sc).toFixed(0)}`,C.mark,{size:12.5,w:700});
-    if(title)text(D,[x+7,y+ih-10],title,C.mark,{size:12.5,w:600});
+    text(D,[x+7,y+11],`${letter} · ×${(k/F.sc).toFixed(0)}`,C["mark-ink"],{size:12.5,w:700});
+    if(title)text(D,[x+7,y+ih-10],title,C["mark-ink"],{size:12.5,w:600});
   };
   const k0=D=>D.sc*0.8;
   const axisIn=(D,cu,e)=>seg(D,add(m.G,mul(ax,-e*3)),add(m.G,mul(ax,(cu[1]-gz)/ax[2]+e*3)),C.red,1.3,[12,3,2,3]);
@@ -782,9 +817,9 @@ function drawPlan(res,cur){
     seg(F,out.CP,[a.cO[0],a.cO[1],0],ouC,1,[6,3]);
     seg(F,out.CP,[a.cI[0],a.cI[1],0],C.mark,1,[2,3]);
     mark(F,[a.cI[0],a.cI[1],0],inC,4);mark(F,[a.cO[0],a.cO[1],0],ouC,4);
-    const ri=Math.abs(a.cI[1])/1000,ro=Math.abs(a.cO[1])/1000;
-    text(F,[F.W/2,F.H-12],`до центра по задней оси: внутр. ${ri.toFixed(2)} м · наруж. ${ro.toFixed(2)} м · ${fx(a.ackD,0)} %`,C.ink,{align:"center",size:13.5});
-  } else text(F,[F.W/2,F.H-12],"поверни руль, чтобы увидеть центр поворота",C["ink-2"],{align:"center",size:13.5});
+    const ri=Math.abs(a.cI[1])/1000,ro=Math.abs(a.cO[1])/1000,wide=F.W>560;
+    text(F,[F.W/2,F.H-12],`${wide?"до центра по задней оси: ":""}внутр. ${ri.toFixed(2)} м · наруж. ${ro.toFixed(2)} м · Аккерман ${fx(a.ackD,0)} %`,C.ink,{align:"center",size:13.5,clamp:true});
+  } else text(F,[F.W/2,F.H-12],"поверни руль, чтобы увидеть центр поворота",C["ink-2"],{align:"center",size:13.5,clamp:true});
 }
 
 // ───────── charts on millimetre paper
@@ -814,14 +849,15 @@ function chart(cv,o){
     for(const s of o.series)if(s.dot!=null&&isFinite(s.dot)){ctx.beginPath();ctx.arc(X,sy(s.dot),4,0,2*Math.PI);ctx.fillStyle=s.c;ctx.fill();}}
   ctx.restore();
   ctx.strokeStyle=C.ink;ctx.lineWidth=1.2;ctx.strokeRect(m.l+0.5,m.t+0.5,pw,ph);
-  ctx.font=`11px ${C.fn}`;ctx.fillStyle=C["ink-2"];
+  ctx.font=`11.5px ${C.fn}`;ctx.fillStyle=C["ink-2"];
   ctx.textAlign="center";ctx.textBaseline="top";
   for(let x=Math.ceil(x0/xs1)*xs1;x<=x1+1e-9;x+=xs1)ctx.fillText(+x.toFixed(6)+"",sx(x),m.t+ph+4);
   ctx.textAlign="right";ctx.textBaseline="middle";
   for(let y=Math.ceil(y0/ys1)*ys1;y<=y1+1e-9;y+=ys1)ctx.fillText(+y.toFixed(6)+"",m.l-5,sy(y));
-  ctx.font=`italic 13px ${C.fl}`;ctx.textAlign="right";ctx.textBaseline="bottom";ctx.fillStyle=C["ink-2"];
-  ctx.fillText(o.xl,m.l+pw,H-1);
-  ctx.textAlign="left";ctx.textBaseline="top";ctx.fillText(o.yl,m.l+5,m.t+3);
+  // axis titles get a paper halo so they stay legible over the grid and curves
+  ctx.font=`italic 13px ${C.fl}`;ctx.lineWidth=4;ctx.strokeStyle=C.paper;ctx.lineJoin="round";ctx.fillStyle=C["ink-2"];
+  ctx.textAlign="right";ctx.textBaseline="bottom";ctx.strokeText(o.xl,m.l+pw,H-1);ctx.fillText(o.xl,m.l+pw,H-1);
+  ctx.textAlign="left";ctx.textBaseline="top";ctx.strokeText(o.yl,m.l+5,m.t+3);ctx.fillText(o.yl,m.l+5,m.t+3);
   cv._map={x0,x1,l:m.l,pw};
 }
 const ok=q=>q&&!q.bad;
@@ -950,17 +986,18 @@ let TAB="ackermann";
 const fmtStep=(v,st)=>{const d=(String(st).split(".")[1]||"").length;return (+v).toFixed(d);};
 function ctlHTML(id){
   if(id==="realign")return `<div class="ctl"><label class="chk"><input type="checkbox" id="c_realign"><span>Выставить схождение заново на новом клиренсе<br><small style="color:var(--ink-2)">выключено — видно, как занижение уводит схождение</small></span></label></div>`;
-  const c=CTL[id];
+  const c=CTL[id],sg=v=>(v<0?"−":"")+Math.abs(v);
   return `<div class="ctl" id="k_${id}"><div class="ctl-h"><label for="c_${id}">${c.n}</label>
-    <span class="stepper"><button type="button" data-step="-1" aria-label="меньше">−</button><input type="number" id="c_${id}" step="${c.step}"><i>${c.u}</i><button type="button" data-step="1" aria-label="больше">+</button></span></div>
-    <input type="range" id="r_${id}" min="${c.min}" max="${c.max}" step="${c.step}" aria-label="${c.n}">
-    <p>${c.h}</p><button type="button" class="undo" hidden>вернуть как на чертеже</button></div>`;
+    <span class="stepper" role="group" aria-label="${c.n}, ${c.u}"><button type="button" data-step="-1" aria-label="меньше на ${c.step} ${c.u}" title="−${c.step} ${c.u}">−</button><input type="number" id="c_${id}" step="${c.step}" min="${c.min}" max="${c.max}" aria-label="${c.n}, ${c.u}"><i aria-hidden="true">${c.u}</i><button type="button" data-step="1" aria-label="больше на ${c.step} ${c.u}" title="+${c.step} ${c.u}">+</button></span></div>
+    <input type="range" id="r_${id}" min="${c.min}" max="${c.max}" step="${c.step}" aria-label="${c.n}, ${c.u}">
+    <div class="scale" aria-hidden="true"><span>${sg(c.min)}</span><span>${sg(c.max)} ${c.u}</span></div>
+    <p>${c.h}</p><button type="button" class="undo" hidden title="Вернуть это значение как на чертеже">↺ как на чертеже</button></div>`;
 }
 function renderPanel(){
   const t=TABS.find(x=>x.id===TAB);
   $("#panel").innerHTML=`<p class="lead">${t.lead}</p>${t.ctl.map(ctlHTML).join("")}
-   <div class="delta"><h2>Что изменилось</h2><table id="dtab"></table>
-   <div class="btns"><button type="button" id="pin">Запомнить как базу</button><button type="button" id="reset">Вернуть всё как на чертеже</button></div></div>`;
+   <div class="delta"><h2>Что изменилось</h2><p class="sub">было → стало, относительно базы</p><table id="dtab" aria-label="Изменения относительно базы"></table>
+   <div class="btns"><button type="button" id="pin" title="Текущая геометрия станет базой: от неё считаются изменения, она же — пунктир «база» на графиках">Запомнить как базу</button><button type="button" id="reset" title="Все регулировки и точки — как на чертеже">Вернуть всё как на чертеже</button></div></div>`;
   for(const id of t.ctl){
     if(id==="realign"){const cb=$("#c_realign");cb.checked=P.realign;cb.addEventListener("change",()=>{P.realign=cb.checked;recompute();});continue;}
     const c=CTL[id],box=$("#k_"+id);
@@ -988,6 +1025,9 @@ function setTab(id){
   TAB=id;try{localStorage.setItem("e46tab",id);}catch(e){}
   try{history.replaceState(null,"","#"+id);}catch(e){}
   document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-selected",b.id==="tab_"+id));
+  { // keep the selected tab visible when the tab bar scrolls sideways (phones)
+    const tb=$("#tab_"+id),bar=$("#tabs");
+    if(tb.offsetLeft<bar.scrollLeft||tb.offsetLeft+tb.offsetWidth>bar.scrollLeft+bar.clientWidth)bar.scrollLeft=Math.max(0,tb.offsetLeft-12);}
   const t=TABS.find(x=>x.id===id),pool=$("#pool"),main=$("#main"),rest=$("#rest");
   [...main.children,...rest.children].forEach(el=>pool.appendChild(el));
   main.appendChild($("#"+t.main));
@@ -1078,7 +1118,8 @@ const DRAG={
 };
 let drag=null;
 function hit(cv,e){const F=cv._F;if(!F)return null;const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
-  for(const h of F.handles)if(Math.hypot(h.x-x,h.y-y)<18)return {F,kind:h.kind};return null;}
+  const rr=e.pointerType==="touch"?26:20;
+  for(const h of F.handles)if(Math.hypot(h.x-x,h.y-y)<rr)return {F,kind:h.kind};return null;}
 for(const id of ["vTop","vSide"]){
   const cv=$("#"+id+" canvas");
   cv.addEventListener("pointerdown",e=>{const h=hit(cv,e);if(!h)return;e.preventDefault();cv.setPointerCapture(e.pointerId);stopPlay();

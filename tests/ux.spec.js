@@ -9,7 +9,8 @@ async function open(page, hash = "ackermann") {
   page.on("pageerror", e => errors.push(String(e)));
   page.on("console", m => { if (m.type() === "error") errors.push(m.text()); });
   await page.goto(`/index.html#${hash}`);
-  await page.waitForFunction(() => window.RES && window.CUR);
+  // RES/CUR are top-level `let`s, so they are not window properties
+  await page.waitForFunction(() => typeof RES !== "undefined" && RES && CUR);
   return errors;
 }
 
@@ -40,7 +41,7 @@ test.describe("loads cleanly", () => {
     await open(page);
     await page.click("#tab_camber");
     await page.goto("/index.html");
-    await page.waitForFunction(() => window.RES);
+    await page.waitForFunction(() => typeof RES !== "undefined" && RES);
     await expect(page.locator("#tab_camber")).toHaveAttribute("aria-selected", "true");
   });
 });
@@ -61,7 +62,6 @@ test.describe("steering", () => {
     await open(page);
     await page.fill("#kR", "-30");
     await page.press("#kR", "Enter");
-    await expect.poll(() => num(page.inputValue("#kR").then ? "" : "")).toBeDefined();
     await expect.poll(async () => num(await page.inputValue("#kR"))).toBeCloseTo(-30, 1);
     expect(num(await page.inputValue("#kS"))).toBeCloseTo(-36.85, 0);
     await page.fill("#kS", "20");
