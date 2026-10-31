@@ -148,6 +148,22 @@ test.describe("info cards", () => {
   });
 });
 
+test.describe("presets", () => {
+  test("choosing the stable-patch setup applies it; a manual change makes it custom", async ({ page }) => {
+    await open(page, "camber");
+    await page.selectOption("#preset", "stable");
+    await expect.poll(() => page.evaluate(() => P.plateR)).toBe(75);
+    expect(await page.evaluate(() => [P.lbjDX, P.slot, P.roll])).toEqual([40, 3.2, 2]);
+    await expect(page.locator("#presetNote")).toContainText("±3°");
+    await expect.poll(() => page.evaluate(() => RES.M.camber0)).toBeCloseTo(-5.6, 1);
+    await page.fill("#c_slot", "2"); await page.press("#c_slot", "Tab");
+    await expect(page.locator("#preset")).toHaveValue("custom");
+    await page.selectOption("#preset", "drawing");
+    await expect.poll(() => page.evaluate(() => P.plateR)).toBeCloseTo(63.5, 0);
+    await expect.poll(() => page.evaluate(() => RES.M.camber0)).toBeCloseTo(-4.69, 2);
+  });
+});
+
 test.describe("steering", () => {
   test("slider turns the wheels, centre button straightens them", async ({ page }) => {
     await open(page);

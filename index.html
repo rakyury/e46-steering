@@ -142,6 +142,12 @@ input[type=range]::-moz-range-thumb{width:18px;height:20px;background:var(--red)
 
 /* change vs base */
 .delta{padding:var(--s3) var(--s4) var(--s4);border-bottom:1px solid var(--ink-3)}
+.preset{padding:var(--s2) var(--s4);border-bottom:1px solid var(--ink-3);display:grid;gap:4px}
+.preset label{display:flex;align-items:center;gap:var(--s2);font-size:var(--t-xs);font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2)}
+.preset select{flex:1;min-width:0;font:inherit;font-size:var(--t-md);font-style:italic;letter-spacing:0;text-transform:none;font-weight:500;color:var(--ink);background:transparent;border:0;border-bottom:1px solid var(--ink-2);padding:3px 0;cursor:pointer;border-radius:0;min-height:32px}
+.preset select option{background:var(--paper);color:var(--ink)}
+.preset .note{margin:0;font-size:var(--t-sm);color:var(--ink-2);line-height:1.35}
+.preset .note b{color:var(--ink);font-family:var(--f-num);font-weight:600;font-size:13px}
 .delta h2,.setgrp h2{margin:0 0 6px;font-size:var(--t-xs);font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2)}
 .delta .sub{margin:0 0 var(--s2);font-size:var(--t-sm);color:var(--ink-2);font-style:italic}
 .delta table{width:100%;border-collapse:collapse}
@@ -1114,24 +1120,43 @@ function ctlHTML(id){
     <div class="scale" aria-hidden="true"><span>${sg(c.min)}</span><span>${sg(c.max)} ${c.u}</span></div>
     <p>${c.h}</p><button type="button" class="undo" hidden title="Вернуть это значение к базе (пока база не запомнена — как на чертеже)">↺ база</button></div>`;
 }
+const PRESETS=[
+  {id:"custom",n:"свой (регулировки ниже)",note:""},
+  {id:"drawing",n:"как на чертеже",P:{},
+   note:"Все регулировки в ноль, точки с чертежа. Параллельный руль, развал стоя −4.69°, кастер 4.77°, KPI 15.6°, мех. трейл 37 мм."},
+  {id:"stable",n:"стабильное пятно 12–45°",P:{plateR:75,plateA:63,lolly:0,lbjDX:40,lbjDY:0,slot:3.2,toe:0,troDY:0,troDX:0,rackDX:0,rackDZ:0,troDZ:0,ride:0,roll:2},
+   note:"Найден перебором ~1200 комбинаций: при контр-руле и крене кузова 2° развал нагруженного колеса к дороге держится в <b>±3°</b> на 12–45° (на чертеже ±4.7°), ноль в 30°. Опора наружу (эксцентриситет <b>75</b>) снимает KPI до <b>14.5°</b>; кастер <b>4.2°</b> не добавлен, возврат руля даёт мех. трейл <b>64 мм</b> (шаровая назад на 40) и подъём <b>17 мм</b> на локе; слот <b>+3.2°</b> ставит развал стоя <b>−5.6°</b>. Та же шаровая назад даёт анти-Аккерман в большом угле: ведомое на локе <b>76°</b> против <b>55°</b>. Крен 2° включён в сетап: под свой крен подбирай слот (на 1° крена ≈ 0.5° слота)."}
+];
+function markCustom(){if(PRESET==="custom")return;PRESET="custom";const sel=$("#preset");if(sel){sel.value="custom";$("#presetNote").innerHTML="";}}
+function applyPreset(id){
+  const p=PRESETS.find(x=>x.id===id);if(!p||!p.P)return;
+  stopPlay();
+  if(id==="drawing"){resetHP();CAR={...CAR0};const s=P.s;resetP();calibrateAck0();P.s=s;PDEF={...P};fillSettings();}
+  else Object.assign(P,p.P);
+  syncCtl();recompute();
+}
 function renderPanel(){
   const t=TABS.find(x=>x.id===TAB);
-  $("#panel").innerHTML=`<p class="lead">${t.lead}</p>${t.ctl.map(ctlHTML).join("")}
+  $("#panel").innerHTML=`<div class="preset"><label>Сетап <select id="preset" aria-label="Готовый сетап">${PRESETS.map(p=>`<option value="${p.id}">${p.n}</option>`).join("")}</select></label><p class="note" id="presetNote"></p></div>
+   <p class="lead">${t.lead}</p>${t.ctl.map(ctlHTML).join("")}
    <div class="delta"><h2>Что изменилось</h2><p class="sub">было → стало, относительно базы</p><table id="dtab" aria-label="Изменения относительно базы"></table>
    <div class="btns"><button type="button" id="pin" title="Текущая геометрия станет базой: от неё считаются изменения, она же — пунктир «база» на графиках">Запомнить как базу</button><button type="button" id="reset" title="Все регулировки и точки — как на чертеже">Вернуть всё как на чертеже</button></div></div>`;
   for(const id of t.ctl){
     if(id==="realign"){const cb=$("#c_realign");cb.checked=P.realign;cb.addEventListener("change",()=>{P.realign=cb.checked;recompute();});continue;}
     const c=CTL[id],box=$("#k_"+id);
-    const set=v=>{v=+v;if(!isFinite(v))return;P[id]=Math.max(c.min,Math.min(c.max,v));syncCtl();recompute();};
+    const set=v=>{v=+v;if(!isFinite(v))return;P[id]=Math.max(c.min,Math.min(c.max,v));markCustom();syncCtl();recompute();};
     $("#r_"+id).addEventListener("input",e=>set(e.target.value));
     $("#c_"+id).addEventListener("change",e=>set(e.target.value));
     box.querySelectorAll("[data-step]").forEach(b=>b.addEventListener("click",()=>set(P[id]+(+b.dataset.step)*(+c.step))));
     box.querySelector(".undo").addEventListener("click",()=>set(BASEP[id]));
   }
   $("#pin").addEventListener("click",()=>{BASE=RES;BASEP={...P};GEN++;syncCtl();drawAll();});
+  {const sel=$("#preset");sel.value=PRESET;$("#presetNote").innerHTML=PRESETS.find(p=>p.id===PRESET).note;
+   sel.addEventListener("change",()=>{PRESET=sel.value;$("#presetNote").innerHTML=PRESETS.find(p=>p.id===PRESET).note;applyPreset(PRESET);});}
   $("#reset").addEventListener("click",()=>{stopPlay();resetHP();CAR={...CAR0};const s=P.s;resetP();calibrateAck0();P.s=s;PDEF={...P};fillSettings();syncCtl();recompute();BASE=RES;BASEP={...P};drawAll();});
   syncCtl();
 }
+let PRESET="custom";
 function syncCtl(){
   for(const id in CTL){const r=$("#r_"+id);if(!r)continue;const c=CTL[id];
     r.value=P[id];$("#c_"+id).value=fmtStep(P[id],c.step);
