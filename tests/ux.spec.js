@@ -128,6 +128,26 @@ test.describe("ride and roll", () => {
   });
 });
 
+test.describe("info cards", () => {
+  test("the ⓘ after the body caption explains lift and roll with live numbers", async ({ page }) => {
+    await open(page, "camber");
+    await page.locator("#steer").fill("40"); await page.locator("#steer").dispatchEvent("input");
+    const ib = page.locator('#vFront .ib[data-id="jack"]');
+    await expect(ib).toBeVisible();
+    await ib.click();
+    const pop = page.locator("#vFront .pop");
+    await expect(pop).toBeVisible();
+    await expect(pop).toContainText("Передок поднят", { timeout: 10000 });
+    await expect(pop).toContainText("Что будет, если");
+    await page.keyboard.press("Escape");
+    await expect(pop).toBeHidden();
+    await page.locator('#vFront .ib[data-id="scrub"]').first().click();
+    await expect(pop).toContainText("Что такое скраб", { timeout: 10000 });
+    await expect(pop).toContainText("Ориентир");
+    expect(await page.evaluate(() => P.lbjDY)).toBe(0); // what-if runs leave the model untouched
+  });
+});
+
 test.describe("steering", () => {
   test("slider turns the wheels, centre button straightens them", async ({ page }) => {
     await open(page);

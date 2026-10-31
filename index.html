@@ -156,6 +156,21 @@ input[type=range]::-moz-range-thumb{width:18px;height:20px;background:var(--red)
 
 /* figures */
 .fig{padding:var(--s3) var(--s4) var(--s3);position:relative}
+.ib{position:absolute;width:22px;height:22px;min-height:0;padding:0;border:1.5px solid var(--mark);border-radius:50%;color:var(--mark-ink);background:var(--paper);font:600 12px/1 var(--f-label);display:grid;place-items:center;z-index:3;transform:translate(-50%,-50%)}
+.ib:hover,.ib:focus-visible{background:var(--mark);color:var(--paper)}
+.pop{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(560px,calc(100vw - 32px));z-index:50;background:var(--paper);border:1.5px solid var(--ink);box-shadow:8px 8px 0 var(--grid-major);padding:var(--s3) var(--s4);font-size:var(--t-md);line-height:1.4;max-height:calc(100vh - 32px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));overflow:auto;overscroll-behavior:contain}
+.pop h4{position:sticky;top:0;background:var(--paper);padding-bottom:4px}
+.pop h4{margin:0 0 4px;font-style:italic;font-weight:600;font-size:var(--t-lg);display:flex;justify-content:space-between;align-items:center;gap:var(--s2)}
+.pop h4 button{min-height:0;padding:2px 8px;font-size:var(--t-sm)}
+.pop h5{margin:var(--s2) 0 2px;font-size:var(--t-xs);font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2)}
+.pop p{margin:0 0 var(--s1)}
+.pop b{font-family:var(--f-num);font-weight:600}
+.pop table{border-collapse:collapse;width:100%;margin:2px 0 var(--s1)}
+.pop td{padding:2px 0;border-bottom:1px solid var(--grid-major);vertical-align:baseline}
+.pop td:first-child{width:46%;padding-right:var(--s2);color:var(--ink-2)}
+.pop td.v{text-align:right;font-variant-numeric:tabular-nums}
+.pop .rec{border-left:3px solid var(--mark);padding-left:var(--s2);color:var(--ink)}
+.pop .rec b{color:var(--mark-ink)}
 .fig-h{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s2) var(--s3);flex-wrap:wrap}
 .fig h3{margin:0;font-style:italic;font-weight:500;font-size:var(--t-xl);line-height:1.15}
 .fig .note{margin:2px 0 var(--s1);font-size:var(--t-sm);color:var(--ink-2);line-height:1.35}
@@ -739,7 +754,19 @@ function ground(F,gz,u0,u1){const c=F.ctx;const A=F.S([u0,gz]),B=F.S([u1,gz]);
   c.strokeStyle=C["ink-3"];c.lineWidth=0.8;c.stroke();}
 function dimH(F,a,b,y,label,col){
   const c=F.ctx;seg2(F,[a,y],[b,y],col,1);const ar=(x,d)=>{c.beginPath();c.moveTo(x,y);c.lineTo(x+d*7,y-2.5);c.lineTo(x+d*7,y+2.5);c.closePath();c.fillStyle=col;c.fill();};
-  const d=Math.sign(b-a)||1;ar(a,d);ar(b,-d);text(F,[(a+b)/2,y-9],label,col,{align:"center",num:true,size:11.5,it:false});}
+  const d=Math.sign(b-a)||1;ar(a,d);ar(b,-d);text(F,[(a+b)/2,y-9],label,col,{align:"center",num:true,size:11.5,it:false});
+  return (a+b)/2+c.measureText(label).width/2;}
+// ⓘ after a caption: the drawing records where, the figure puts a real button there (canvas text cannot be clicked)
+function info(F,x,y,id){(F.infos=F.infos||[]).push({x,y,id});}
+function placeInfos(cv,F){
+  const fig=cv.closest(".fig");if(!fig)return;const list=F.infos||[];
+  const btns=[...fig.querySelectorAll(".ib")];
+  list.forEach((it,i)=>{let b=btns[i];
+    if(!b){b=document.createElement("button");b.type="button";b.className="ib";b.textContent="i";b.addEventListener("click",e=>{e.stopPropagation();openInfo(fig,b.dataset.id);});fig.appendChild(b);}
+    b.dataset.id=it.id;b.title=INFO[it.id].t;b.setAttribute("aria-label",INFO[it.id].t);
+    b.style.left=(cv.offsetLeft+it.x)+"px";b.style.top=(cv.offsetTop+it.y)+"px";b.hidden=false;});
+  btns.slice(list.length).forEach(b=>{b.hidden=true;});
+}
 const CL=[16,4,2,4];
 
 // ───────── views
@@ -794,7 +821,8 @@ function drawFront(res,cur,big){
   ground(F,0,-1160,1160);
   seg(F,[0,0,res.gz-40],[0,0,res.gz+880],C["ink-3"],0.8,CL);
   const lift=(cur.L.jack+cur.R.jack)/2;
-  if(lift>0.5||Math.abs(cur.L.roll)>0.05)text(F,[F.S([0,0])[0],F.S([0,0])[1]+24],`кузов${lift>0.5?` поднят на ${lift.toFixed(1)} мм`:""}${Math.abs(cur.L.roll)>0.05?`${lift>0.5?",":""} крен ${fx(cur.L.roll,2)}°`:""}`,C["ink-2"],{size:12,align:"center"});
+  if(lift>0.5||Math.abs(cur.L.roll)>0.05){const str=`кузов${lift>0.5?` поднят на ${lift.toFixed(1)} мм`:""}${Math.abs(cur.L.roll)>0.05?`${lift>0.5?",":""} крен ${fx(cur.L.roll,2)}°`:""}`;const xy=[F.S([0,0])[0],F.S([0,0])[1]+24];
+    text(F,xy,str,C["ink-2"],{size:12,align:"center"});if(big)info(F,xy[0]+F.ctx.measureText(str).width/2+14,xy[1],"jack");}
   for(const [k,col] of [["L",C.red],["R",C.blue]])polyline(F,res.sw.map(r=>r&&!r.bad?r[k].CP:null),col,1.2,[2,3]);
   const rc=cur.rc;
   for(const [m,g,col] of [[cur.L,res.gL,C.red],[cur.R,res.gR,C.blue]]){
@@ -811,13 +839,14 @@ function drawFront(res,cur,big){
     // camber label sits on the wheel itself (halo keeps it legible), KPI at the top mount: they cannot collide at any ride height
     text(F,F.P(add(p.WC,[0,0,R*0.62])),`${sd>0?"левое":"правое"}${wide?" · развал":""} ${fx(m.camber,2)}°`,col,{align:"center",size:14,w:600,clamp:true});
     if(big)text(F,F.P(add(p.T,[0,sd*70,30])),`KPI ${fx(m.kpi,1)}°`,col,{align:sd>0?"left":"right",size:13,clamp:true});
-    const a=F.P(m.G),b=F.P(m.CP);if(big)dimH(F,a[0],b[0],a[1]+20,`скраб ${m.scrub.toFixed(0)}`,col);
+    const a=F.P(m.G),b=F.P(m.CP);if(big){const e=dimH(F,a[0],b[0],a[1]+20,`скраб ${m.scrub.toFixed(0)}`,col);info(F,e+14,a[1]+11,"scrub");}
   }
   seg(F,cur.L.p.TRI,cur.R.p.TRI,C.ink,6);
   if(rc){const Rc=F.P([0,rc.y,rc.z]);markXY(F,Rc[0],Rc[1],C.mark,6);
     // label goes above the mark when the roll centre sits close to the ground hatch
     const below=Rc[1]+34<F.S([0,0])[1];
     text(F,[Rc[0],Rc[1]+(below?20:-18)],`центр крена ${fx(rc.h,0)} мм`,C["mark-ink"],{size:13.5,w:600,align:"center"});}
+  placeInfos($("#vFront canvas"),F);
 }
 function drawSide(res,cur,big){
   // the textbook caster picture: the whole wheel seen from the left in its own plane, the steering axis leaning back
@@ -1286,6 +1315,60 @@ function alignTo(cam,cas){
   $("#aMsg").textContent=msg.join(" · ");
   syncCtl();recompute();
 }
+// ───────── info cards: why the body lifts and rolls, what scrub does, what to turn and by how much
+function whatIf(patch,pre){ // compute the whole model with a few parameters changed, restore everything after
+  const save={...P};Object.assign(P,patch);let r=null;
+  try{if(pre)pre();const res=compute();if(res.ok){r={M:res.M,cur:computeCurrent(res)};}}finally{P=save;}
+  return r;}
+function seek(key,get,target,tol,x0,dx){ // secant on a what-if figure; the adjuster value that hits the target, or null
+  const c=CTL[key],cl=x=>Math.max(c.min,Math.min(c.max,x));
+  let a=x0,fa=get(whatIf({[key]:a}));let b=cl(x0+dx),fb=get(whatIf({[key]:b}));
+  for(let i=0;i<7;i++){if(fa==null||fb==null)return null;if(Math.abs(fb-target)<tol)return b;if(fb===fa)return null;
+    const n=cl(b-(fb-target)*(b-a)/(fb-fa));a=b;fa=fb;b=n;fb=get(whatIf({[key]:b}));}
+  return fb!=null&&Math.abs(fb-target)<tol?b:null;}
+const row=(n,v)=>`<tr><td>${n}</td><td class="v">${v}</td></tr>`;
+const INFO={
+  jack:{t:"Откуда подъём и крен кузова",html(){
+    const M=RES.M,c=CUR,turn=c.s>0?"L":"R",inn=c[turn],out=c[turn==="L"?"R":"L"];const lift=(c.L.jack+c.R.jack)/2,dJ=inn.jack-out.jack,q=P.rollShare/100,t=(1-q)/(2*q)*dJ;
+    const w1=whatIf({lbjDY:P.lbjDY+10}),w2=whatIf({rollShare:Math.max(20,P.rollShare-15)});
+    const w3=whatIf({},()=>{fit("lolly","caster",M.caster-1);});
+    const lk=(w)=>w?`подъём на локе <b>${fx(w.M.jack)} мм</b>, крен <b>${fx(Math.abs(w.M.lockRoll),2)}°</b>`:"геометрия не собирается";
+    let rec="";
+    if(Math.abs(M.lockRoll)>0.5){const v=seek("lbjDY",w=>w&&Math.abs(w.M.lockRoll),0.5,0.03,P.lbjDY,8);
+      rec=v!=null?`Чтобы крен на локе стал <b>0.5°</b>: шаровая в слоте наружу на <b>${fx(v,1)} мм</b> (скраб ${fx(whatIf({lbjDY:v}).M.scrub,0)} мм, развал стоя ${fx(whatIf({lbjDY:v}).M.camber0,2)}°).`:"Крен на локе выше 0.5°, но одной шаровой в слоте его не убрать — смотри скраб и кастер.";}
+    else rec=`Крен на локе <b>${fx(Math.abs(M.lockRoll),2)}°</b> — в норме (до 0.5°). Подъём <b>${fx(M.jack)} мм</b>: ориентир 10–20 мм, этого хватает, чтобы руль сам возвращался из лока.`;
+    return `<h5>Что происходит</h5>
+<p>Ось поворота наклонена (KPI <b>${fx(M.kpi,1)}°</b>, кастер <b>${fx(M.caster,2)}°</b>) и входит в дорогу в стороне от пятна (скраб <b>${fx(M.scrub,0)} мм</b>). При повороте пятно идёт по дуге вокруг оси и опускается, колесо упирается в дорогу и поднимает кузов. Часть от KPI одинакова для обоих колёс — это <b>подъём</b>; часть от кастера противоположна: внутреннее колесо поднимает кузов, наружное опускает — это <b>крен</b> к наружной стороне.</p>
+<table>${row("Руль сейчас",`${fx(Math.abs(inn.del),1)}° внутр. / ${fx(Math.abs(out.del),1)}° наруж.`)}${row("Внутреннее колесо поднимает кузов на",fx(inn.jack,1)+" мм")}${row("Наружное",fx(out.jack,1)+" мм")}${row("Передок поднят",fx(lift,1)+" мм")}${row("Крен кузова",fx(Math.abs(c.L.roll),2)+"° к наружной стороне")}${row("Ход колёс от крена (внутр. сжато / наруж. разгружено)","±"+fx(Math.abs(t),1)+" мм")}</table>
+<p>Подъём — это возвращающий момент на руле: он и ставит руль прямо из лока. Крен на стоячей машине сам по себе безвреден, но ход колёс от него подруливает через бампстир (график «Схождение в крене»). Доля передка в жёсткости на крен сейчас <b>${P.rollShare} %</b>: больше доля — больше крен, меньше ход колёс.</p>
+<h5>Что будет, если</h5>
+<table>${row("Шаровая в слоте наружу +10 мм (скраб "+(w1?fx(w1.M.scrub,0):"—")+" мм)",lk(w1))}${row("Кастер на 1° меньше (лолипопом)",lk(w3))}${row("Доля передка "+P.rollShare+" → "+Math.max(20,P.rollShare-15)+" %",lk(w2))}</table>
+<h5>Ориентир</h5><p class="rec">${rec}</p>`;}},
+  scrub:{t:"Что такое скраб",html(){
+    const M=RES.M,c=CUR;const w1=whatIf({lbjDY:P.lbjDY+10}),w2=whatIf({lbjDY:P.lbjDY-10});
+    const sc=(w)=>w?`скраб <b>${fx(w.M.scrub,0)} мм</b>, развал стоя <b>${fx(w.M.camber0,2)}°</b>, подъём на локе <b>${fx(w.M.jack)} мм</b>`:"геометрия не собирается";
+    let rec;
+    if(M.scrub>60){const v=seek("lbjDY",w=>w&&w.M.scrub,50,1,P.lbjDY,8);
+      rec=v!=null?`Чтобы скраб стал <b>50 мм</b>: шаровая в слоте наружу на <b>${fx(v,1)} мм</b> (развал стоя ${fx(whatIf({lbjDY:v}).M.camber0,2)}°, подъём на локе ${fx(whatIf({lbjDY:v}).M.jack)} мм). Или диск с вылетом ET на <b>${fx(M.scrub-50,0)} мм</b> больше — скраб уходит мм в мм.`:`Скраб ${fx(M.scrub,0)} мм, одной шаровой до 50 мм не дотянуть — смотри вылет дисков: +1 мм ET = −1 мм скраба.`;}
+    else if(M.scrub<25)rec=`Скраб <b>${fx(M.scrub,0)} мм</b> — мало для дрифта: подъёма на локе ${fx(M.jack)} мм, руль будет вяло возвращаться. Диск с ET на ${fx(40-M.scrub,0)} мм меньше даст 40 мм.`;
+    else rec=`Скраб <b>${fx(M.scrub,0)} мм</b> — в ориентире для дрифта (30–60 мм): руль возвращается, но не выламывает на кочках.`;
+    return `<h5>Что это</h5>
+<p>Расстояние по дороге от точки, где ось поворота входит в землю, до центра пятна. Сейчас <b>${fx(M.scrub,0)} мм</b>${Math.abs(c.L.del)>0.5?` (на повёрнутом колесе ${fx(Math.abs(c.L.scrub),0)} / ${fx(Math.abs(c.R.scrub),0)} мм)`:""}; положительный — ось входит внутри пятна, как здесь.</p>
+<h5>Что делает</h5>
+<p>Это плечо, на котором сила в пятне крутит колесо вокруг оси: торможение, кочка, разное покрытие под колёсами — всё приходит в руль. Вместе с KPI он же даёт <b>подъём кузова</b> при повороте (сейчас <b>${fx(M.jack)} мм</b> на локе), а значит и возврат руля. Большой скраб: тяжёлый руль на месте, сильный возврат, руль дёргает на неровностях. Малый: лёгкий руль, вялый возврат.</p>
+<h5>Чем меняется</h5>
+<table>${row("Шаровая в слоте наружу +10 мм",sc(w1))}${row("Шаровая в слоте внутрь −10 мм",sc(w2))}${row("Диск с вылетом ET на 10 мм меньше","скраб +10 мм, развал тот же (в модели нет, считай прямо)")}${row("Больше KPI (опора стойки внутрь)","ось входит в землю ближе к пятну — скраб меньше, но внутреннее колесо сильнее уходит в плюс развала на локе")}</table>
+<h5>Ориентир</h5><p class="rec">${rec}</p>`;}}
+};
+function openInfo(fig,id){
+  let pop=fig.querySelector(".pop");if(!pop){pop=document.createElement("div");pop.className="pop";pop.setAttribute("role","dialog");fig.appendChild(pop);}
+  pop.innerHTML=`<h4>${INFO[id].t}<button type="button" class="close" aria-label="Закрыть">✕</button></h4><p>считаю…</p>`;pop.hidden=false;
+  pop.querySelector(".close").addEventListener("click",()=>{pop.hidden=true;});
+  setTimeout(()=>{if(pop.hidden)return;pop.innerHTML=`<h4>${INFO[id].t}<button type="button" class="close" aria-label="Закрыть">✕</button></h4>`+INFO[id].html();
+    pop.querySelector(".close").addEventListener("click",()=>{pop.hidden=true;});},30);
+}
+document.addEventListener("keydown",e=>{if(e.key==="Escape")document.querySelectorAll(".pop").forEach(p=>{p.hidden=true;});});
+document.addEventListener("pointerdown",e=>{if(!e.target.closest(".pop,.ib"))document.querySelectorAll(".pop").forEach(p=>{p.hidden=true;});});
 const num=v=>{const s=String(v).replace(/[−–]/g,"-").replace(",",".").replace(/[^0-9.+\-]/g,"");return /\d/.test(s)?+s:NaN;}; // garbage → NaN, never 0
 for(const [id,k] of [["#kL","L"],["#kR","R"]]){const el=$(id);
   el.addEventListener("focus",()=>el.select());
