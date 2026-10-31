@@ -53,7 +53,7 @@ test.describe("defaults", () => {
     expect(await page.textContent("#kA")).toBe("—");
     expect(Math.abs(await page.evaluate(() => RES.M.ackStatic))).toBeLessThan(1.5);
     await expect(page.locator("#c_troDY")).toHaveValue("0.0");
-    expect(await page.textContent("#k_troDY p")).toMatch(/По чертежу шарнир стоит на 10\.\d мм/);
+    expect(await page.textContent("#k_troDY p")).toMatch(/По чертежу шарнир стоит на (9|10)\.\d мм/);
   });
 });
 
@@ -111,6 +111,20 @@ test.describe("input robustness", () => {
       const m = v.match(/^(.+?) →\s*(.+?) /);
       if (m) expect(m[1], v).not.toBe(m[2]); else expect(dv).toBe("=");
     }
+  });
+});
+
+test.describe("ride and roll", () => {
+  test("the roll control rolls the car and the roll charts follow", async ({ page }) => {
+    await open(page, "ride");
+    await expect(page.locator("#c_roll")).toBeVisible();
+    await expect(page.locator("#w_c10")).toBeVisible();
+    await expect(page.locator("#w_c11")).toBeVisible();
+    await page.fill("#c_roll", "2"); await page.press("#c_roll", "Tab");
+    await expect.poll(() => page.evaluate(() => CUR.L.roll)).toBeCloseTo(2, 1);
+    const kC = await page.inputValue("#kC").catch(() => page.textContent("#kC"));
+    expect(kC).toContain("/"); // both cambers shown, now unequal
+    await expect(page.locator("#vFront")).toContainText("крен");
   });
 });
 

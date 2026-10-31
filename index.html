@@ -70,9 +70,9 @@ input[type=text],input[type=number]{font-variant-numeric:tabular-nums}
 #alignTg{display:none}
 #alignTg[aria-expanded="true"]{background:var(--paper-2)}
 .chips{display:flex;gap:var(--s2);flex-wrap:wrap}
-.chip{border:1px solid var(--ink-3);padding:3px 9px 4px;display:grid;line-height:1.15;width:104px;min-width:0;align-content:center}
+.chip{border:1px solid var(--ink-3);padding:3px 9px 4px;display:grid;line-height:1.15;width:auto;min-width:104px;align-content:center}
 .chip span{font-size:var(--t-xs);color:var(--ink-2);font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.chip b{font-family:var(--f-num);font-weight:500;font-size:16px;font-variant-numeric:tabular-nums}
+.chip b{font-family:var(--f-num);font-weight:500;font-size:16px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .chip.l b{color:var(--red)}.chip.r b{color:var(--blue)}.chip.m b{color:var(--mark-ink)}
 .chip.edit{cursor:text;border-color:var(--ink-2)}
 .chip.edit:hover{background:var(--fill)}
@@ -90,12 +90,12 @@ input[type=text],input[type=number]{font-variant-numeric:tabular-nums}
 .align .amsg{font-size:var(--t-sm);color:var(--mark-ink)}
 
 /* tabs */
-.tabs{display:flex;border-bottom:1.5px solid var(--ink);overflow-x:auto;scrollbar-width:thin}
+.tabs{display:flex;border-bottom:1.5px solid var(--ink);overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}
 .tabs button{border:0;border-right:1px solid var(--ink-3);padding:10px 18px 9px;text-align:left;display:grid;gap:1px;flex:0 0 auto;position:relative;min-height:var(--tap)}
 .tabs button b{font-weight:600;font-style:italic;font-size:var(--t-xl);line-height:1.1}
 .tabs button span{font-size:var(--t-sm);color:var(--ink-2)}
 .tabs button[aria-selected="true"]{background:var(--paper-2)}
-.tabs button[aria-selected="true"]::after{content:"";position:absolute;left:0;right:0;bottom:-1.5px;height:4px;background:var(--mark)}
+.tabs button[aria-selected="true"]::after{content:"";position:absolute;left:0;right:0;bottom:0;height:4px;background:var(--mark)}
 .tabs button:focus-visible{outline-offset:-3px}
 
 /* stage */
@@ -367,7 +367,7 @@ let CAR={...CAR0};
 
 // ───────── adjustable parameters
 let ACK0=0; // tie-rod joint offset (mm, outboard) at which the steering is parallel near centre; found by calibrateAck0()
-const DEF={s:0,stroke:60,rackDX:0,rackDZ:0,troDX:0,troDY:0,troDZ:0,lbjDX:0,lbjDY:0,lolly:0,plateR:0,plateA:0,slot:0,ride:0,toe:0,wheelbase:2725,realign:false};
+const DEF={s:0,stroke:60,rackDX:0,rackDZ:0,troDX:0,troDY:0,troDZ:0,lbjDX:0,lbjDY:0,lolly:0,plateR:0,plateA:0,slot:0,ride:0,roll:0,rollShare:55,toe:0,wheelbase:2725,realign:false};
 let P={};
 function plateFrame(){
   const u0=nrm(sub(HP.TOP,HP.DLOW));
@@ -451,6 +451,7 @@ function solve(g,mode,c,q0){
 // ───────── measurements
 let R=0;              // tire radius
 function cpOf(p){const d=nrm(add([0,0,-1],mul(p.a,p.a[2])));return add(p.WC,mul(d,R));}
+const gAt=(g,y)=>typeof g==="number"?g:g.z0+g.k*y; // ground height in the body frame: a number, or a line through both patches
 function sideMeas(p,gz){
   const sd=p.side, CP=cpOf(p);
   const camber=-Math.asin(p.a[2])/DEG;
@@ -464,7 +465,32 @@ function sideMeas(p,gz){
   const perp=Q=>(dot(sub(Q,p.LBJ),f)*dz-(Q[2]-p.LBJ[2])*df)/dl;
   return {p,CP,G,camber,del:del/DEG,f,lat,dir,
     trail:dot(sub(G,CP),f), mtrail:-perp(CP), coff:-perp(p.WC), scrub:dot(sub(CP,G),lat),
-    caster:Math.atan2(-df,dz)/DEG, kpi:Math.atan2(-dot(dir,lat),dz)/DEG, jack:gz-CP[2]};
+    caster:Math.atan2(-df,dz)/DEG, kpi:Math.atan2(-dot(dir,lat),dz)/DEG, jack:gAt(gz,CP[1])-CP[2]};
+}
+// the road runs through both contact patches: the body roll to it (left side up = +) and the camber each wheel
+// really has to the road, which is what a tyre feels; the body-relative figure stays as camberBody
+function withBody(mL,mR){
+  const dy=mL.CP[1]-mR.CP[1],dz=mL.CP[2]-mR.CP[2];const roll=-Math.atan2(dz,dy)/DEG;
+  for(const m of [mL,mR]){m.camberBody=m.camber;m.camber=m.camberBody-m.p.side*roll;m.roll=roll;}
+  return roll;
+}
+// standing on the road with the wheels turned, the patches push the body up. The springs carry the same load as
+// before, so the front lifts by the mean jacking and the body rolls by the jacking difference in the proportion the
+// front holds of the roll stiffness; what the rear resists becomes wheel travel (inner compresses, outer extends),
+// and that travel re-steers the wheels. Travel t: 2t = (1-q)/q * (J_L - J_R), measured on the settled pose.
+function settle(gL,gR,qL,qR,s,gnd){
+  const q=P.rollShare/100;if(q>=0.999)return {qL,qR};
+  const c=(1-q)/(2*q);
+  const pL0=pose(gL,qL,s),pR0=pose(gR,qR,s);
+  const dJ=(pL,pR)=>{const cL=cpOf(pL),cR=cpOf(pR);return (gAt(gnd,cL[1])-cL[2])-(gAt(gnd,cR[1])-cR[2]);};
+  let t=(1-q)*dJ(pL0,pR0)/2;if(Math.abs(t)<0.02)return {qL,qR};
+  for(let it=0;it<3;it++){
+    const a=solve(gL,"height",{s,z:pL0.WC[2]+t},qL),b=solve(gR,"height",{s,z:pR0.WC[2]-t},qR);
+    if(!a.ok||!b.ok)return null;qL=a.q;qR=b.q;
+    const r=2*t-2*c*dJ(pose(gL,qL,s),pose(gR,qR,s));if(Math.abs(r)<0.05)break;
+    t-=r/(2+4*c);
+  }
+  return {qL,qR};
 }
 function icOf(p,g){
   const x0=HP.WC[0];
@@ -489,7 +515,7 @@ function rollCenter(mL,mR,gL,gR,gz,s=0){
     return [m.CP[0],m.CP[1]+py*d,m.CP[2]+pz*d];};
   const iL=ic(mL,gL),iR=ic(mR,gR);if(!iL||!iR)return null;
   const x=lineX([mL.CP[1],mL.CP[2]],[iL[1],iL[2]],[mR.CP[1],mR.CP[2]],[iR[1],iR[2]]);
-  return x?{y:x[0],z:x[1],h:x[1]-gz,iL,iR}:null;
+  return x?{y:x[0],z:x[1],h:x[1]-gAt(gz,x[0]),iL,iR}:null;
 }
 function ackermann(s,mL,mR,kTrack,c0){
   if(Math.abs(s)<0.4)return null;
@@ -528,13 +554,20 @@ function compute(quick){ // quick: only the first few mm of a left turn, for cal
     const al=solve(g,"align",{d:-g.side*P.toe*DEG,z:zRef},[0,0,0,0]);
     g.Ltie=len(sub(pose(g,al.q,0).TRO,g.TRI0));
     const ht=solve(g,"height",{s:0,z:HP.WC[2]-P.ride},al.q);
-    g.q0=ht.q;g.th0=ht.q[0];if(!al.ok||!ht.ok)out.ok=false;
+    g.qs=ht.q;if(!al.ok||!ht.ok)out.ok=false;
+    // body roll: the wheels travel in antiphase about the hub half-track (+ = right side down, as in a left turn)
+    const rz=Math.abs(HP.WC[1])*Math.tan(P.roll*DEG);
+    const hr=Math.abs(P.roll)>1e-9?solve(g,"height",{s:0,z:HP.WC[2]-P.ride-g.side*rz},ht.q):ht;
+    g.q0=hr.q;g.th0=hr.q[0];if(!hr.ok)out.ok=false;
   }
-  const pL0=pose(gL,gL.q0,0),pR0=pose(gR,gR.q0,0);
-  const gz=cpOf(pL0)[2];out.gz=gz;
-  const m0L=sideMeas(pL0,gz),m0R=sideMeas(pR0,gz);
+  const pL0=pose(gL,gL.qs,0),pR0=pose(gR,gR.qs,0);
+  const m0L=sideMeas(pL0,cpOf(pL0)[2]),m0R=sideMeas(pR0,cpOf(pL0)[2]);withBody(m0L,m0R);
+  out.m0={L:m0L,R:m0R};
   out.kTrack=m0L.G[1]-m0R.G[1];
   out.stat=staticAck(pL0);
+  // the road: through both static patches of the (possibly rolled) car; heights in the body frame are measured from it
+  {const cL=cpOf(pose(gL,gL.q0,0)),cR=cpOf(pose(gR,gR.q0,0));const k=(cL[2]-cR[2])/(cL[1]-cR[1]);out.gnd={z0:cL[2]-k*cL[1],k};}
+  const gz=out.gnd;out.gz=gz.z0;
   const sw=new Array(2*N+1).fill(null);
   for(const dirn of (quick?[1]:[1,-1])){
     let qL=gL.q0,qR=gR.q0,alive=true;
@@ -542,9 +575,10 @@ function compute(quick){ // quick: only the first few mm of a left turn, for cal
       const s=dirn*P.stroke*i/N, idx=N+dirn*i;
       if(!alive){if(!sw[idx])sw[idx]={s,bad:true};continue;}
       const a=solve(gL,"steer",{s,th:gL.th0},qL),b=solve(gR,"steer",{s,th:gR.th0},qR);
-      if(!a.ok||!b.ok){alive=false;sw[idx]={s,bad:true};continue;}
-      qL=a.q;qR=b.q;
-      const mL=sideMeas(pose(gL,a.q,s),gz),mR=sideMeas(pose(gR,b.q,s),gz);
+      const st=a.ok&&b.ok?settle(gL,gR,a.q,b.q,s,gz):null;
+      if(!st){alive=false;sw[idx]={s,bad:true};continue;}
+      qL=st.qL;qR=st.qR;
+      const mL=sideMeas(pose(gL,qL,s),gz),mR=sideMeas(pose(gR,qR,s),gz);withBody(mL,mR);
       if(Math.abs(mL.del)>89||Math.abs(mR.del)>89){alive=false;sw[idx]={s,bad:true};continue;}
       sw[idx]={s,L:mL,R:mR,ack:ackermann(s,mL,mR,out.kTrack,sw[N])};
     }
@@ -564,6 +598,17 @@ function compute(quick){ // quick: only the first few mm of a left turn, for cal
       bt.push({t,toe:-mL.del,camber:mL.camber,rc:rollCenter(mL,mR,gL,gR,gzt)});}};
   runB(travel);runB(travel.slice(1).map(v=>-v));
   bt.sort((a,b)=>a.t-b.t);out.bt=bt;
+  // body roll sweep at straight-ahead: the wheels travel in antiphase, figures are to the road, not the body
+  const rt=[];const HT=Math.abs(HP.WC[1]);
+  const runR=(list)=>{let a0=gL.qs,b0=gR.qs;for(const ph of list){
+      const dz=HT*Math.tan(ph*DEG);
+      const a=solve(gL,"height",{s:0,z:zr-dz},a0),b=solve(gR,"height",{s:0,z:zr+dz},b0);
+      if(!a.ok||!b.ok)break;a0=a.q;b0=b.q;
+      const pl=pose(gL,a.q,0),pr=pose(gR,b.q,0);const mL=sideMeas(pl,cpOf(pl)[2]),mR=sideMeas(pr,cpOf(pl)[2]);withBody(mL,mR);
+      rt.push({ph,camL:mL.camber,camR:mR.camber,toeL:-mL.del,toeR:mR.del});}};
+  const phs=[];for(let i=0;i<=16;i++)phs.push(i*0.25);
+  runR(phs);runR(phs.slice(1).map(v=>-v));
+  rt.sort((a,b)=>a.ph-b.ph);out.rt=rt;
   out.M=metrics(out);
   // the arm-line rule ignores rack position and tie-rod angle, so the static figure is taken from the real
   // wheel angles near centre; the plan-view lines are drawn to the matching equivalent intersection
@@ -572,11 +617,12 @@ function compute(quick){ // quick: only the first few mm of a left turn, for cal
   return out;
 }
 function computeCurrent(res){
-  const {gL,gR,gz,sw}=res;const s=P.s;
+  const {gL,gR,sw}=res,gz=res.gnd;const s=P.s; // the road, not its centreline height: jacking and settling are measured from it
   let best=null,bd=1e9;for(const r of sw)if(r&&!r.bad&&Math.abs(r.s-s)<bd){bd=Math.abs(r.s-s);best=r;}
   const qL=best?best.L.p.q:gL.q0,qR=best?best.R.p.q:gR.q0;
   const a=solve(gL,"steer",{s,th:gL.th0},qL),b=solve(gR,"steer",{s,th:gR.th0},qR);
-  const mL=sideMeas(pose(gL,a.q,s),gz),mR=sideMeas(pose(gR,b.q,s),gz);
+  const st=(a.ok&&b.ok&&settle(gL,gR,a.q,b.q,s,gz))||{qL:a.q,qR:b.q};
+  const mL=sideMeas(pose(gL,st.qL,s),gz),mR=sideMeas(pose(gR,st.qR,s),gz);withBody(mL,mR);
   return {ok:a.ok&&b.ok,s,L:mL,R:mR,ack:ackermann(s,mL,mR,res.kTrack,sw[N]),rc:rollCenter(mL,mR,gL,gR,gz,s)};
 }
 // summary numbers that do not depend on where the wheel is turned right now
@@ -585,15 +631,17 @@ function metrics(res){
   for(let i=N+1;i<sw.length;i++){if(sw[i]&&!sw[i].bad)li=i;else break;}
   const lk=sw[li];
   const at=deg=>{for(let i=N+2;i<=li;i++){const a=sw[i-1].ack,b=sw[i].ack;if(a&&b&&a.di<=deg&&b.di>=deg){const t=(deg-a.di)/(b.di-a.di);return a.ackD+(b.ackD-a.ackD)*t;}}return NaN;};
-  const bt=t=>res.bt.find(q=>q.t===t);const b0=bt(0),b40=bt(40);
+  const bt=t=>res.bt.find(q=>q.t===t);const b0=bt(0),b40=bt(40);const m0=res.m0.L;
+  const rt=ph=>res.rt.find(q=>Math.abs(q.ph-ph)<1e-9);const r0=rt(0),r2=rt(2);
   return {
     ackStatic:at(4), ack30:at(30), ackLock:lk.ack?lk.ack.ackD:NaN,
     lockIn:lk.L.del, lockOut:lk.R.del, stuck:li<sw.length-1,
-    caster:c.L.caster, kpi:c.L.kpi, trail:c.L.trail, mtrail:c.L.mtrail, coff:c.L.coff, scrub:c.L.scrub,
-    trailOut:lk.R.trail, jack:(lk.L.jack+lk.R.jack)/2,
-    camber0:c.L.camber, camberIn:lk.L.camber, camberOut:lk.R.camber,
+    caster:m0.caster, kpi:m0.kpi, trail:m0.trail, mtrail:m0.mtrail, coff:m0.coff, scrub:m0.scrub,
+    trailOut:lk.R.trail, jack:(lk.L.jack+lk.R.jack)/2, lockRoll:lk.L.roll,
+    camber0:m0.camber, camberIn:lk.L.camber, camberOut:lk.R.camber,
     rc:b0&&b0.rc?b0.rc.h:NaN,
     bump:b0&&b40?b40.toe-b0.toe:NaN, gain:b0&&b40?b40.camber-b0.camber:NaN,
+    rollCam:r2?r2.camR:NaN, rollToe:r2&&r0?r2.toeR-r0.toeR:NaN,
     tie:res.gL.Ltie
   };
 }
@@ -742,7 +790,7 @@ function drawFront(res,cur,big){
   ground(F,0,-1160,1160);
   seg(F,[0,0,res.gz-40],[0,0,res.gz+880],C["ink-3"],0.8,CL);
   const lift=(cur.L.jack+cur.R.jack)/2;
-  if(lift>0.5)text(F,[F.S([0,0])[0],F.S([0,0])[1]+24],`кузов поднят на ${lift.toFixed(1)} мм`,C["ink-2"],{size:12,align:"center"});
+  if(lift>0.5||Math.abs(cur.L.roll)>0.05)text(F,[F.S([0,0])[0],F.S([0,0])[1]+24],`кузов${lift>0.5?` поднят на ${lift.toFixed(1)} мм`:""}${Math.abs(cur.L.roll)>0.05?`${lift>0.5?",":""} крен ${fx(cur.L.roll,2)}°`:""}`,C["ink-2"],{size:12,align:"center"});
   for(const [k,col] of [["L",C.red],["R",C.blue]])polyline(F,res.sw.map(r=>r&&!r.bad?r[k].CP:null),col,1.2,[2,3]);
   const rc=cur.rc;
   for(const [m,g,col] of [[cur.L,res.gL,C.red],[cur.R,res.gR,C.blue]]){
@@ -919,7 +967,7 @@ const CH=[
   {id:"c6",t:"Подъём кузова при повороте",xl:"← влево · руль · вправо →",yl:"мм",cur:"s",minSpan:4,
    lg:[["левое","red"],["правое","blue"]],
    ser:r=>[{pts:r.sw.map(q=>ok(q)?[-q.s,q.L.jack]:null),c:C.red},{pts:r.sw.map(q=>ok(q)?[-q.s,q.R.jack]:null),c:C.blue}],
-   dots:c=>[c.L.jack,c.R.jack],note:M=>`На локе передок поднимается в среднем на <b>${fx(M.jack)} мм</b>: это создаёт возвращающий момент на руле.`},
+   dots:c=>[c.L.jack,c.R.jack],note:M=>`На локе передок поднимается на <b>${fx(M.jack)} мм</b> и кренится на <b>${fx(Math.abs(M.lockRoll),2)}°</b> к наружной стороне: внутреннее колесо поднимает кузов сильнее. Подъём создаёт возвращающий момент на руле.`},
   {id:"c7",t:"Бампстир — подруливание при ходе подвески",xl:"ход колеса, мм (+ сжатие)",yl:"схождение, °",cur:"t",minSpan:0.4,
    lg:[["левое колесо, руль прямо","red"]],
    ser:r=>[{pts:r.bt.map(q=>[q.t,q.toe]),c:C.red}],dots:()=>[],
@@ -928,6 +976,14 @@ const CH=[
    lg:[["левое колесо","red"]],
    ser:r=>[{pts:r.bt.map(q=>[q.t,q.camber]),c:C.red}],dots:()=>[],
    note:M=>`На 40 мм сжатия развал меняется на <b>${fx(M.gain,2)}°</b>.`},
+  {id:"c10",t:"Развал в крене",xl:"крен кузова, ° (+ правый борт вниз)",yl:"развал к дороге, °",cur:"roll",minSpan:2,
+   lg:[["левое","red"],["правое","blue"]],
+   ser:r=>[{pts:r.rt.map(q=>[q.ph,q.camL]),c:C.red},{pts:r.rt.map(q=>[q.ph,q.camR]),c:C.blue}],dots:()=>[],
+   note:M=>`При крене 2° наружное (правое) колесо имеет к дороге <b>${fx(M.rollCam,2)}°</b>: кузов наклоняется вместе с колесом и съедает отрицательный развал, сжатие возвращает лишь часть.`},
+  {id:"c11",t:"Схождение в крене",xl:"крен кузова, ° (+ правый борт вниз)",yl:"схождение, °",cur:"roll",minSpan:0.4,
+   lg:[["левое","red"],["правое","blue"]],
+   ser:r=>[{pts:r.rt.map(q=>[q.ph,q.toeL]),c:C.red},{pts:r.rt.map(q=>[q.ph,q.toeR]),c:C.blue}],dots:()=>[],
+   note:M=>`При крене 2° наружное колесо подруливает на <b>${fx(M.rollToe,2)}°</b> (+ в схождение), внутреннее — в другую сторону. Это бампстир, каким он приходит на входе в поворот.`},
   {id:"c9",t:"Высота центра крена",xl:"ход колёс, мм (+ сжатие)",yl:"от земли, мм",cur:"t",minSpan:20,
    lg:[["центр крена","mark"]],
    ser:r=>[{pts:r.bt.map(q=>q.rc?[q.t,q.rc.h]:null),c:C.mark,w:2.6}],dots:()=>[],
@@ -964,6 +1020,7 @@ const CTL={
   slot:{n:"Наклон стакана в слоте кулака",min:-4,max:4,step:0.05,u:"°",h:"+ — больше отрицательного развала."},
   lbjDY:{n:"Шаровая в слоте кулака: наружу",min:-30,max:30,step:0.5,u:"мм",h:"Меняет развал и скраб."},
   ride:{n:"Клиренс",min:-60,max:60,step:1,u:"мм",h:"− — занижение. Смотри развал, подруливание и центр крена."},
+  roll:{n:"Крен кузова",min:-4,max:4,step:0.1,u:"°",h:"+ — правый борт вниз, как в левом повороте. Колёса ходят в противофазе; развал и схождение на графиках — к дороге, не к кузову."},
   rackDZ:{n:"Рейка вверх / вниз",min:-50,max:50,step:1,u:"мм",h:"Проставки рейки. Главное средство от подруливания при ходе подвески."},
   troDZ:{n:"Шарнир тяги на кулаке: вверх",min:-40,max:40,step:0.5,u:"мм",h:"Проставка под шарнир тяги — тоже против подруливания."}
 };
@@ -975,19 +1032,19 @@ const TABS=[
   {id:"caster",t:"Кастер и трейл",sub:"шаровая, лолипоп, опора",
    lead:"<b>Кастер</b> — наклон оси поворота назад. <b>Трейл</b> — насколько пятно контакта отстаёт от точки, где ось входит в землю. Больше трейл — тяжелее руль и сильнее он возвращается.",
    ctl:["lbjDX","lolly","plateA"],main:"vSide",rest:["w_c5","w_c6"],
-   met:["caster","trail","mtrail","coff","trailOut","jack"]},
+   met:["caster","trail","mtrail","coff","trailOut","jack","lockRoll"]},
   {id:"camber",t:"Развал и KPI",sub:"опора, слот стакана",
    lead:"<b>Развал</b> стоя и в повороте. Из-за кастера и KPI внутреннее колесо в повороте выпрямляется и уходит в плюс; наружное сначала заваливается сильнее, а ближе к локу снова выпрямляется.",
    ctl:["plateR","plateA","slot","lbjDY"],main:"vFront",rest:["w_c2","w_c1"],
    met:["camber0","camberIn","camberOut","kpi","scrub","caster"]},
-  {id:"ride",t:"Клиренс",sub:"бампстир, центр крена",
-   lead:"Как <b>занижение</b> меняет развал, схождение и центр крена. Рейка и шарнир тяги по высоте убирают бампстир.",
-   ctl:["ride","rackDZ","troDZ","realign"],main:"vFront",rest:["w_c7","w_c8","w_c9"],
-   met:["rc","bump","gain","camber0"]},
+  {id:"ride",t:"Клиренс и крен",sub:"бампстир, крен, центр крена",
+   lead:"Как <b>занижение</b> и <b>крен</b> меняют развал, схождение и центр крена. Рейка и шарнир тяги по высоте убирают бампстир; в крене колёса ходят в противофазе, и развал считается к дороге.",
+   ctl:["ride","roll","rackDZ","troDZ","realign"],main:"vFront",rest:["w_c7","w_c8","w_c10","w_c11","w_c9"],
+   met:["rc","bump","gain","rollCam","rollToe","camber0"]},
   {id:"all",t:"Всё сразу",sub:"все виды, графики, таблица",
    lead:"Все регулировки, все виды и графики, полная таблица значений.",
-   ctl:Object.keys(CTL).concat(["realign"]),main:"vTop",rest:["vFront","vSide","vPlan","w_c3","w_c4","w_c1","w_c2","w_c5","w_c6","w_c7","w_c8","w_c9","vStamp"],
-   met:["ackStatic","ackLock","lockIn","lockOut","caster","mtrail","camber0","camberIn","camberOut","kpi","scrub","rc","bump"]}
+   ctl:Object.keys(CTL).concat(["realign"]),main:"vTop",rest:["vFront","vSide","vPlan","w_c3","w_c4","w_c1","w_c2","w_c5","w_c6","w_c7","w_c8","w_c10","w_c11","w_c9","vStamp"],
+   met:["ackStatic","ackLock","lockIn","lockOut","caster","mtrail","camber0","camberIn","camberOut","kpi","scrub","rc","bump","jack","lockRoll","rollCam","rollToe"]}
 ];
 const MET={
   ackStatic:{n:"Аккерман статический",u:"%",d:0},
@@ -1001,6 +1058,9 @@ const MET={
   coff:{n:"Кастер-офсет",u:"мм",d:1},
   trailOut:{n:"Трейл наружного на локе",u:"мм",d:1},
   jack:{n:"Подъём передка на локе",u:"мм",d:1},
+  lockRoll:{n:"Крен кузова на локе (к наружной стороне)",u:"°",d:2},
+  rollCam:{n:"Развал наружного при крене 2°",u:"°",d:2},
+  rollToe:{n:"Схождение наружного при крене 2°",u:"°",d:2},
   camber0:{n:"Развал стоя",u:"°",d:2},
   camberIn:{n:"Развал внутреннего на локе",u:"°",d:2},
   camberOut:{n:"Развал наружного на локе",u:"°",d:2},
@@ -1065,7 +1125,7 @@ function setTab(id){
 }
 
 // ───────── settings (expert)
-const SET=[["stroke","Ход рейки от центра ±, мм",1],["wheelbase","Колёсная база, мм",1],["toe","Схождение на колесо, ° (+ в схождение)",0.02]];
+const SET=[["stroke","Ход рейки от центра ±, мм",1],["wheelbase","Колёсная база, мм",1],["rollShare","Доля передка в жёсткости на крен, % (крен и ход колёс на локе)",5],["toe","Схождение на колесо, ° (+ в схождение)",0.02]];
 function fillSettings(){
   $("#setCar").innerHTML=SET.map(([k,n,st])=>`<div class="setrow"><label for="s_${k}">${n}</label><input class="num" type="number" id="s_${k}" step="${st}" value="${P[k]}"></div>`).join("")+
     [["camber","Развал на чертеже, °",0.01],["tireW","Ширина шины, мм",5],["groundZ","Земля, Z мм",0.1]].map(([k,n,st])=>`<div class="setrow"><label for="s_${k}">${n}</label><input class="num" type="number" id="s_${k}" step="${st}" value="${CAR[k]}"></div>`).join("");
@@ -1124,8 +1184,8 @@ function drawAll(){
     const dots=c.cur==="s"?c.dots(CUR):(c.cur==="di"&&CUR.ack&&CUR.s>0?c.dots(CUR):[]);
     series.forEach((s,i)=>{s.dot=dots[i];});
     if(showGhost)series=c.ser(BASE,{ghost:true}).slice(0,1).map(s=>({...s,c:C.mark,a:0.55,w:2.6,d:[1.5,4]})).concat(series); // dotted amber: unlike any reference line
-    const cur=c.cur==="s"?-P.s:c.cur==="di"?(CUR.ack&&CUR.s>0?CUR.ack.di:null):0;
-    chart($("#"+c.id),{series,xl:c.xl,yl:c.yl,cursor:cur,x:c.cur==="s"?[-P.stroke,P.stroke]:null,y0:c.y0,minSpan:c.minSpan,key:GEN});
+    const cur=c.cur==="s"?-P.s:c.cur==="di"?(CUR.ack&&CUR.s>0?CUR.ack.di:null):c.cur==="roll"?P.roll:0;
+    chart($("#"+c.id),{series,xl:c.xl,yl:c.yl,cursor:cur,x:c.cur==="s"?[-P.stroke,P.stroke]:c.cur==="roll"?[-4,4]:null,y0:c.y0,minSpan:c.minSpan,key:GEN});
     $("#n_"+c.id).innerHTML=c.note(M,BASE.M);
   }
   // top strip

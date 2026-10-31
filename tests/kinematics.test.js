@@ -25,8 +25,8 @@ describe("baseline matches the drawing", () => {
   });
   test("lock angles at ±60 mm rack", () => {
     const M = run().M;
-    near(M.lockIn, 55.7, 0.1, "inner lock");
-    near(M.lockOut, 48.0, 0.1, "outer lock");
+    near(M.lockIn, 55.3, 0.1, "inner lock"); // the body settles: inner wheel compresses ~6 mm and loses ~0.4 deg
+    near(M.lockOut, 48.05, 0.1, "outer lock");
     assert.equal(M.stuck, false);
   });
   test("contact patch sits on the ground straight ahead", () => {
@@ -122,7 +122,7 @@ describe("Ackermann", () => {
     const dO = ideal(lk.di, r.kTrack, 2725);
     near(lk.doIdeal, dO, 1e-6, "ideal outer");
     near(lk.ackC, (lk.di - lk.do) / (lk.di - dO) * 100, 1e-6, "ackC");
-    near(lk.ackD, 50.0, 0.3, "dynamic Ackermann at lock");
+    near(lk.ackD, 47.5, 0.3, "dynamic Ackermann at lock"); // 50 % with the body held still; settling compresses the inner wheel, which toes it in
   });
   test("static toe does not masquerade as Ackermann", () => {
     const base = run().M;
@@ -139,7 +139,7 @@ describe("Ackermann", () => {
   });
   test("calibrateAck0 finds the parallel-steer joint offset and makes the control's zero mean 0 %", () => {
     const v = K.calibrateAck0();
-    near(v, -10.5, 0.3, "ACK0");
+    near(v, -9.9, 0.3, "ACK0"); // −10.5 with the body held still: caster jacking rolls the body a little even near centre
     const r = run({ troDY: 0 });
     near(r.M.ackStatic, 0, 1.5, "static Ackermann at control zero");
     assert.ok(r.M.ackLock < 0, "slightly anti at lock with parallel centre");
@@ -185,6 +185,52 @@ describe("trail, caster and KPI measured in the wheel plane", () => {
     const G = K.add(p.LBJ, K.mul(d, (gz - p.LBJ[2]) / d[2]));
     near(G[0] - r.sw[N].L.CP[0], r.M.trail, 1e-6, "trail");
     near(r.sw[N].L.CP[1] - G[1], r.M.scrub, 1e-6, "scrub");
+  });
+});
+
+describe("body equilibrium while steering", () => {
+  test("the front lifts by the mean jacking and rolls toward the outside of the turn", () => {
+    const r = run(); const lk = r.sw[2 * N]; // left turn at lock
+    assert.ok(lk.L.jack > lk.R.jack + 5, "inner wheel jacks more");
+    near(r.M.jack, (lk.L.jack + lk.R.jack) / 2, 1e-9, "lift = mean jack");
+    assert.ok(lk.L.roll > 0.3 && lk.L.roll < 1, "roll to the right (left side up) " + lk.L.roll);
+    near(lk.L.roll, -Math.atan2(lk.L.CP[2] - lk.R.CP[2], lk.L.CP[1] - lk.R.CP[1]) / K.DEG, 1e-9, "roll from the patches");
+    near(lk.L.camber, lk.L.camberBody - lk.L.roll, 1e-9, "camber to the road, left");
+    near(lk.R.camber, lk.R.camberBody + lk.L.roll, 1e-9, "camber to the road, right");
+  });
+  test("with all the roll stiffness at the front the wheels do not travel", () => {
+    const a = run({ rollShare: 100 }).sw[2 * N];
+    fresh(); const b = run({ rollShare: 55 }).sw[2 * N];
+    // no rear to resist: the body simply rolls by the whole jacking difference, so the roll is larger and the wheels keep their static travel
+    assert.ok(a.L.roll > b.L.roll * 1.5, `roll ${a.L.roll} vs ${b.L.roll}`);
+    assert.ok(a.L.jack - a.R.jack > b.L.jack - b.R.jack + 5, "no travel: the full jacking difference stays");
+    assert.ok(a.L.del > b.L.del + 0.2, "compressing the inner wheel in the settled case re-steers it");
+  });
+  test("straight ahead nothing settles", () => {
+    const c = run().sw[N];
+    near(c.L.roll, 0, 1e-9); near(c.L.jack, 0, 1e-6); near(c.L.camber, c.L.camberBody, 1e-9);
+  });
+});
+
+describe("body roll mode", () => {
+  test("the roll sweep is antisymmetric and measured to the road", () => {
+    const r = run(); const at = ph => r.rt.find(q => Math.abs(q.ph - ph) < 1e-9);
+    const p = at(2), m = at(-2), z = at(0);
+    near(z.camL, -4.69, 0.01); near(z.toeL, 0, 1e-6);
+    near(p.camL, m.camR, 1e-6, "mirror camber"); near(p.toeL, m.toeR, 1e-6, "mirror toe");
+    // right side down: the compressed right wheel loses negative camber to the road (roll adds more than the gain takes), and toes in by the bump steer
+    assert.ok(p.camR > z.camR + 1 && p.camR < z.camR + 2, "outer camber to the road " + p.camR);
+    assert.ok(p.toeR > 0.2 && p.toeR < 0.45, "outer toe-in " + p.toeR);
+    near(r.M.rollCam, p.camR, 1e-9); near(r.M.rollToe, p.toeR - z.toeR, 1e-9);
+  });
+  test("a rolled car starts its sweep rolled, alignment figures stay static", () => {
+    const r = run({ roll: 2 }); const c = r.sw[N];
+    assert.ok(r.ok);
+    near(c.L.roll, 2, 0.05, "roll at centre");
+    near(r.M.camber0, -4.69, 0.01, "static camber is the unrolled figure");
+    near(c.R.camber, r.M.rollCam, 0.02, "sweep centre matches the roll sweep");
+    assert.ok(Math.abs(r.gnd.k) > 0.01, "the road tilts in the body frame");
+    for (const i of [N, N + 30, 2 * N]) near(r.sw[i].L.jack * 0 + (K.gAt(r.gnd, r.sw[i].L.CP[1]) - r.sw[i].L.CP[2]), r.sw[i].L.jack, 1e-9, "jack is measured from the tilted road");
   });
 });
 
