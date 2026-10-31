@@ -154,10 +154,15 @@ test.describe("presets", () => {
     await page.selectOption("#preset", "stable");
     await expect.poll(() => page.evaluate(() => P.plateR)).toBe(75);
     expect(await page.evaluate(() => [P.lbjDX, P.slot, P.roll])).toEqual([40, 3.2, 2]);
+    await expect.poll(() => page.evaluate(() => RES.M.caster)).toBeCloseTo(4.5, 1); // caster 4.5° fitted by the lollipop
+    expect(await page.evaluate(() => P.lolly)).toBeGreaterThan(1);
     await expect(page.locator("#presetNote")).toContainText("±3°");
     await expect.poll(() => page.evaluate(() => RES.M.camber0)).toBeCloseTo(-5.6, 1);
     await page.fill("#c_slot", "2"); await page.press("#c_slot", "Tab");
     await expect(page.locator("#preset")).toHaveValue("custom");
+    await page.selectOption("#preset", "stable3");
+    await expect.poll(() => page.evaluate(() => RES.M.caster)).toBeCloseTo(3, 1);
+    expect(await page.evaluate(() => [P.lbjDX, P.slot])).toEqual([0, 2.15]);
     await page.selectOption("#preset", "drawing");
     await expect.poll(() => page.evaluate(() => P.plateR)).toBeCloseTo(63.5, 0);
     await expect.poll(() => page.evaluate(() => RES.M.camber0)).toBeCloseTo(-4.69, 2);
