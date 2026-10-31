@@ -333,7 +333,7 @@ test.describe("phone", () => {
     await expect(page.locator("#c_troDY")).toHaveValue("-11.5");
     const o = await page.$eval("#c_troDY", el => ({ sw: el.scrollWidth, cw: el.clientWidth }));
     expect(o.sw).toBeLessThanOrEqual(o.cw);
-    await expect(page.locator("#k_troDY .undo")).toHaveText(/параллельный руль/);
+    await expect(page.locator("#k_troDY .undo")).toHaveText(/база/);
   });
   test("touch targets are at least 36 px tall", async ({ page }) => {
     await open(page, "ackermann");

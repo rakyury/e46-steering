@@ -703,18 +703,22 @@ function hull(pts){pts=pts.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]);const cr=(o
   const lo=[],up=[];for(const p of pts){while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0)lo.pop();lo.push(p);}
   for(let i=pts.length-1;i>=0;i--){const p=pts[i];while(up.length>=2&&cr(up[up.length-2],up[up.length-1],p)<=0)up.pop();up.push(p);}
   up.pop();lo.pop();return lo.concat(up);}
-function wheel(F,m,col){
+function wheel(F,m,col,gy){
+  // gy: the road's screen height; a cambered tyre is a rigid drum in the maths (the patch is the tread centre), but on
+  // paper its loaded edge would poke through the road, so the tread is flattened onto it like a real tyre
   const p=m.p,a=p.a,ref=Math.abs(a[2])<0.9?[0,0,1]:[1,0,0];const e1=nrm(cross(a,ref)),e2=cross(a,e1);
   const ring=(c,r)=>{const out=[];for(let i=0;i<40;i++){const t=i/40*2*Math.PI;out.push(add(c,add(mul(e1,r*Math.cos(t)),mul(e2,r*Math.sin(t)))));}return out;};
+  const PP=q=>{const v=F.P(q);if(gy!=null&&v[1]>gy-0.5)v[1]=gy-0.5;return v;};
   const w=CAR.tireW/2;const ro=ring(add(p.WC,mul(a,w)),R),ri=ring(add(p.WC,mul(a,-w)),R);
-  const h=hull(ro.concat(ri).map(F.P));const c=F.ctx;
+  const h=hull(ro.concat(ri).map(PP));const c=F.ctx;
   c.beginPath();h.forEach((q,i)=>i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1]));c.closePath();
   c.fillStyle=C.fill;c.fill();c.strokeStyle=col;c.lineWidth=1.4;c.stroke();
   // a turned wheel reads as a drum: the sidewall nearer the viewer (further forward, +X) is solid, the far one dashed,
   // and the rim sits on the near side — so which way the wheel points is obvious at lock
   const nearSign=a[0]>=0?1:-1,near=nearSign>0?ro:ri,far=nearSign>0?ri:ro;
-  polyline(F,far.concat([far[0]]),col,0.6,[2,3]);
-  polyline(F,near.concat([near[0]]),col,1.1);
+  const loop=(pts,wd,dash)=>{c.beginPath();pts.map(PP).forEach((q,i)=>i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1]));c.closePath();c.strokeStyle=col;c.lineWidth=wd;c.setLineDash(dash||[]);c.stroke();c.setLineDash([]);};
+  loop(far,0.6,[2,3]);
+  loop(near,1.1);
   const rim=ring(add(p.WC,mul(a,nearSign*w*0.55)),216);polyline(F,rim.concat([rim[0]]),col,0.8,[4,3]);
   const hub=ring(add(p.WC,mul(a,nearSign*w*0.55)),60);polyline(F,hub.concat([hub[0]]),col,0.8);
 }
@@ -795,7 +799,7 @@ function drawFront(res,cur,big){
   const rc=cur.rc;
   for(const [m,g,col] of [[cur.L,res.gL,C.red],[cur.R,res.gR,C.blue]]){
     const p=m.p;
-    wheel(F,m,col);
+    wheel(F,m,col,F.S([0,0])[1]);
     seg(F,g.AF,p.LBJ,C.ink,2.4);seg(F,g.AR,p.LBJ,C.ink,2.4);
     seg(F,p.TRI,p.TRO,col,2);
     polyline(F,[p.LBJ,p.D,p.WC,p.TRO,p.LBJ],C["ink-2"],1);
@@ -1079,7 +1083,7 @@ function ctlHTML(id){
     <span class="stepper" role="group" aria-label="${c.n}, ${c.u}"><button type="button" data-step="-1" aria-label="меньше на ${c.step} ${c.u}" title="−${c.step} ${c.u}">−</button><input type="number" id="c_${id}" step="${c.step}" min="${c.min}" max="${c.max}" aria-label="${c.n}, ${c.u}"><i aria-hidden="true">${c.u}</i><button type="button" data-step="1" aria-label="больше на ${c.step} ${c.u}" title="+${c.step} ${c.u}">+</button></span></div>
     <input type="range" id="r_${id}" min="${c.min}" max="${c.max}" step="${c.step}" aria-label="${c.n}, ${c.u}">
     <div class="scale" aria-hidden="true"><span>${sg(c.min)}</span><span>${sg(c.max)} ${c.u}</span></div>
-    <p>${c.h}</p><button type="button" class="undo" hidden title="${id==="troDY"?"Вернуть к параллельному рулю (0)":"Вернуть это значение как на чертеже"}">${id==="troDY"?"↺ параллельный руль":"↺ как на чертеже"}</button></div>`;
+    <p>${c.h}</p><button type="button" class="undo" hidden title="Вернуть это значение к базе (пока база не запомнена — как на чертеже)">↺ база</button></div>`;
 }
 function renderPanel(){
   const t=TABS.find(x=>x.id===TAB);
@@ -1093,16 +1097,16 @@ function renderPanel(){
     $("#r_"+id).addEventListener("input",e=>set(e.target.value));
     $("#c_"+id).addEventListener("change",e=>set(e.target.value));
     box.querySelectorAll("[data-step]").forEach(b=>b.addEventListener("click",()=>set(P[id]+(+b.dataset.step)*(+c.step))));
-    box.querySelector(".undo").addEventListener("click",()=>set(PDEF[id]));
+    box.querySelector(".undo").addEventListener("click",()=>set(BASEP[id]));
   }
-  $("#pin").addEventListener("click",()=>{BASE=RES;BASEP={...P};GEN++;drawAll();});
+  $("#pin").addEventListener("click",()=>{BASE=RES;BASEP={...P};GEN++;syncCtl();drawAll();});
   $("#reset").addEventListener("click",()=>{stopPlay();resetHP();CAR={...CAR0};const s=P.s;resetP();calibrateAck0();P.s=s;PDEF={...P};fillSettings();syncCtl();recompute();BASE=RES;BASEP={...P};drawAll();});
   syncCtl();
 }
 function syncCtl(){
   for(const id in CTL){const r=$("#r_"+id);if(!r)continue;const c=CTL[id];
     r.value=P[id];$("#c_"+id).value=fmtStep(P[id],c.step);
-    const mod=Math.abs(P[id]-PDEF[id])>1e-6;$("#k_"+id).classList.toggle("mod",mod);$("#k_"+id).querySelector(".undo").hidden=!mod;}
+    const mod=Math.abs(P[id]-BASEP[id])>1e-6;$("#k_"+id).classList.toggle("mod",mod);$("#k_"+id).querySelector(".undo").hidden=!mod;}
   const st=$("#steer");st.min=-(RES?RES.sHi:P.stroke);st.max=-(RES?RES.sLo:P.stroke);st.value=-P.s;
 }
 function renderTabs(){
@@ -1134,7 +1138,7 @@ function fillSettings(){
   $("#hpt").innerHTML=`<tr><td></td><td class="num">X</td><td class="num">Y</td><td class="num">Z</td></tr>`+
     Object.entries(HP0).map(([k,v])=>`<tr class="${v.est?"est":""}"><td>${v.n}</td>${[0,1,2].map(i=>`<td><input type="number" step="0.1" id="hp_${k}_${i}" value="${HP[k][i]}" aria-label="${v.n} ${"XYZ"[i]}"></td>`).join("")}</tr>`).join("");
   for(const k in HP0)for(const i of [0,1,2])$(`#hp_${k}_${i}`).addEventListener("change",e=>{const v=+e.target.value;if(!isFinite(v))return;
-    HP[k][i]=v;if(k==="TOP"||k==="PLATE"||k==="DLOW"){const f=plateFrame();P.plateR=f.r0;P.plateA=f.a0;PDEF.plateR=f.r0;PDEF.plateA=f.a0;syncCtl();}calibrateAck0();renderPanel();recompute();});
+    HP[k][i]=v;if(k==="TOP"||k==="PLATE"||k==="DLOW"){const f=plateFrame();P.plateR=f.r0;P.plateA=f.a0;PDEF.plateR=f.r0;PDEF.plateA=f.a0;BASEP.plateR=f.r0;BASEP.plateA=f.a0;syncCtl();}calibrateAck0();renderPanel();recompute();});
 }
 
 // ───────── state and drawing orchestration
