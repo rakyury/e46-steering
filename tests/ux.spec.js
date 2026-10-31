@@ -67,7 +67,7 @@ test.describe("input robustness", () => {
     await page.fill("#kS", "abc"); await page.press("#kS", "Enter");
     await page.waitForTimeout(100);
     expect(await page.evaluate(() => P.s)).toBe(38);
-    await expect.poll(() => page.inputValue("#kS")).toBe("38.0");
+    await expect.poll(() => page.inputValue("#kS")).toBe("−38.0"); // chips show + = right; the slider at −38 is a left turn
   });
   test("garbage in the alignment row changes nothing", async ({ page }) => {
     await open(page);
@@ -119,25 +119,34 @@ test.describe("steering", () => {
     await open(page);
     await page.locator("#steer").fill("-40"); // slider value = −rack, so −40 is a left turn of 40 mm
     await page.locator("#steer").dispatchEvent("input");
-    await expect.poll(() => page.inputValue("#kS")).toBe("40.0");
+    await expect.poll(() => page.inputValue("#kS")).toBe("−40.0"); // chips show + = right
     const kL = num(await page.inputValue("#kL")), kR = num(await page.inputValue("#kR"));
-    expect(kL).toBeGreaterThan(25); expect(kR).toBeGreaterThan(25);
+    expect(kL).toBeLessThan(-25); expect(kR).toBeLessThan(-25);
     expect(Math.abs(kL - kR)).toBeLessThan(3); // parallel steer by default: both wheels close together
     await page.click("#center");
     await expect.poll(() => page.inputValue("#kS")).toBe("0");
     expect(await page.textContent("#kA")).toBe("—");
   });
+  test("slider right = positive chips = wheels turned right", async ({ page }) => {
+    await open(page);
+    await page.locator("#steer").fill("30"); await page.locator("#steer").dispatchEvent("input");
+    await expect.poll(() => page.inputValue("#kS")).toBe("30.0");
+    expect(num(await page.inputValue("#kL"))).toBeGreaterThan(15);
+    expect(num(await page.inputValue("#kR"))).toBeGreaterThan(15);
+    const f = await page.evaluate(() => CUR.L.f); // the wheel's forward vector leans to −Y, the car's right
+    expect(f[1]).toBeLessThan(-0.2);
+  });
   test("typing a wheel angle finds the rack position", async ({ page }) => {
     await open(page);
-    await page.fill("#kR", "-30");
+    await page.fill("#kR", "-30"); // typed with + = right: −30 is a left turn, internally del = +30
     await page.press("#kR", "Enter");
-    await expect.poll(() => page.evaluate(() => CUR.R.del)).toBeCloseTo(-30, 2);
-    await expect.poll(async () => num(await page.inputValue("#kS"))).toBeCloseTo(await page.evaluate(() => P.s), 1); // redraw happens on the next frame
-    expect(await page.evaluate(() => P.s)).toBeLessThan(-30);
+    await expect.poll(() => page.evaluate(() => CUR.R.del)).toBeCloseTo(30, 2);
+    await expect.poll(async () => num(await page.inputValue("#kS"))).toBeCloseTo(await page.evaluate(() => -P.s), 1); // redraw happens on the next frame
+    expect(await page.evaluate(() => P.s)).toBeGreaterThan(30);
     await expect.poll(async () => num(await page.inputValue("#kR"))).toBeCloseTo(-30, 1);
     await page.fill("#kS", "20");
     await page.press("#kS", "Enter");
-    await expect.poll(() => page.evaluate(() => P.s)).toBeCloseTo(20, 5);
+    await expect.poll(() => page.evaluate(() => P.s)).toBeCloseTo(-20, 5);
   });
   test("dragging across a chart steers", async ({ page }) => {
     await open(page, "ackermann");
@@ -196,7 +205,7 @@ test.describe("adjustments", () => {
     await page.locator("#steer").fill("-40");
     await page.locator("#steer").dispatchEvent("input");
     await expect.poll(() => page.textContent("#kA")).toContain("анти");
-    expect(num(await page.inputValue("#kR"))).toBeGreaterThan(num(await page.inputValue("#kL")));
+    expect(Math.abs(num(await page.inputValue("#kR")))).toBeGreaterThan(Math.abs(num(await page.inputValue("#kL")))); // anti: outer (right) wheel turned more
     expect(await page.textContent("#nTop")).toContain("анти");
   });
   test("dragging the rack handle on the top view moves the rack", async ({ page }) => {

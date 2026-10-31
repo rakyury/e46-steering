@@ -232,8 +232,9 @@ details.settings summary small{font-size:var(--t-sm);color:var(--ink-2)}
   .wheel .play em{display:none}
   .wheel input[type=range]{height:var(--tap)}
   .wheel input[type=range]::-webkit-slider-thumb{margin-top:-16px}
-  .steer .lbl{font-size:var(--t-xs);margin-top:0;justify-content:center}
-  .steer .lbl > span:first-child,.steer .lbl > span:last-child{display:none}
+  .steer .lbl{font-size:var(--t-xs);margin-top:0}
+  .steer .lbl .wd{display:none}
+  .steer .lbl > span:first-child,.steer .lbl > span:last-child{white-space:nowrap}
   .wheel .mini,#alignTg{min-height:36px;padding:3px 10px;font-size:13px}
   .chips{display:grid;grid-template-columns:1fr 1fr 1fr 1.4fr 1.1fr;gap:var(--s1)}
   .chip{width:auto;min-width:0;padding:1px 3px 2px;min-height:0}
@@ -269,12 +270,12 @@ details.settings summary small{font-size:var(--t-sm);color:var(--ink-2)}
     <button class="play" id="play" title="Прокрутить руль от упора до упора · пробел" aria-label="Лок-ту-лок: прокрутить руль от упора до упора">▶&#xFE0E;<em> лок-ту-лок</em></button>
     <div class="steer">
       <input type="range" id="steer" step="0.25" aria-label="Руль: влево — вправо" title="Тяни или нажимай ← → (с Shift — по 5 мм); двойной клик — центр">
-      <div class="lbl"><span>← руль влево</span><span class="acts"><button type="button" class="mini" id="center" title="Поставить колёса прямо">● центр</button><button type="button" class="mini" id="alignTg" aria-expanded="false" aria-controls="align" title="Развал, кастер и схождение числами">установка ✎</button></span><span>вправо →</span></div>
+      <div class="lbl"><span class="dl">← <span class="wd">руль </span>влево</span><span class="acts"><button type="button" class="mini" id="center" title="Поставить колёса прямо">● центр</button><button type="button" class="mini" id="alignTg" aria-expanded="false" aria-controls="align" title="Развал, кастер и схождение числами">установка ✎</button></span><span>вправо →</span></div>
     </div>
     <div class="chips" aria-live="polite">
-      <label class="chip l edit" title="Угол левого колеса. Введи число и нажми Enter: + влево, − вправо"><span data-s="левое ✎">левое колесо ✎</span><input id="kL" type="text" inputmode="decimal" autocomplete="off" aria-label="Угол левого колеса, градусы, плюс — влево"></label>
-      <label class="chip r edit" title="Угол правого колеса. Введи число и нажми Enter: + влево, − вправо"><span data-s="правое ✎">правое колесо ✎</span><input id="kR" type="text" inputmode="decimal" autocomplete="off" aria-label="Угол правого колеса, градусы, плюс — влево"></label>
-      <label class="chip edit" title="Ход рейки от центра, мм. Введи число и нажми Enter: + влево, − вправо"><span data-s="рейка ✎">рейка, мм ✎</span><input id="kS" type="text" inputmode="decimal" autocomplete="off" aria-label="Ход рейки, мм, плюс — влево"></label>
+      <label class="chip l edit" title="Угол левого колеса. Введи число и нажми Enter: + вправо, − влево"><span data-s="левое ✎">левое колесо ✎</span><input id="kL" type="text" inputmode="decimal" autocomplete="off" aria-label="Угол левого колеса, градусы, плюс — вправо"></label>
+      <label class="chip r edit" title="Угол правого колеса. Введи число и нажми Enter: + вправо, − влево"><span data-s="правое ✎">правое колесо ✎</span><input id="kR" type="text" inputmode="decimal" autocomplete="off" aria-label="Угол правого колеса, градусы, плюс — вправо"></label>
+      <label class="chip edit" title="Ход рейки от центра, мм. Введи число и нажми Enter: + вправо, − влево"><span data-s="рейка ✎">рейка, мм ✎</span><input id="kS" type="text" inputmode="decimal" autocomplete="off" aria-label="Ход рейки, мм, плюс — вправо"></label>
       <div class="chip m" title="Аккерман в текущем положении руля: 100 % — оба колеса катятся вокруг одной точки, 0 % — параллельно, «анти» — наружное колесо повёрнуто сильнее внутреннего"><span data-s="Аккерман">Аккерман</span><b id="kA">—</b></div>
       <div class="chip" title="Развал левого и правого колеса в текущем положении руля, °"><span data-s="развал">развал Л/П</span><b id="kC">—</b></div>
     </div>
@@ -920,7 +921,7 @@ const CH=[
    lg:[["левое","red"],["правое","blue"]],
    ser:r=>[{pts:r.sw.map(q=>ok(q)?[-q.s,q.L.jack]:null),c:C.red},{pts:r.sw.map(q=>ok(q)?[-q.s,q.R.jack]:null),c:C.blue}],
    dots:c=>[c.L.jack,c.R.jack],note:M=>`На локе передок поднимается в среднем на <b>${fx(M.jack)} мм</b>: это создаёт возвращающий момент на руле.`},
-  {id:"c7",t:"Подруливание при ходе подвески",xl:"ход колеса, мм (+ сжатие)",yl:"схождение, °",cur:"t",minSpan:0.4,
+  {id:"c7",t:"Бампстир — подруливание при ходе подвески",xl:"ход колеса, мм (+ сжатие)",yl:"схождение, °",cur:"t",minSpan:0.4,
    lg:[["левое колесо, руль прямо","red"]],
    ser:r=>[{pts:r.bt.map(q=>[q.t,q.toe]),c:C.red}],dots:()=>[],
    note:M=>`На 40 мм сжатия: <b>${fx(M.bump,2)}°</b> (+ в схождение). Зависит от высоты рейки и шарнира тяги.`},
@@ -980,8 +981,8 @@ const TABS=[
    lead:"<b>Развал</b> стоя и в повороте. Из-за кастера и KPI внутреннее колесо в повороте выпрямляется и уходит в плюс; наружное сначала заваливается сильнее, а ближе к локу снова выпрямляется.",
    ctl:["plateR","plateA","slot","lbjDY"],main:"vFront",rest:["w_c2","w_c1"],
    met:["camber0","camberIn","camberOut","kpi","scrub","caster"]},
-  {id:"ride",t:"Клиренс",sub:"крен и подруливание",
-   lead:"Как <b>занижение</b> меняет развал, схождение и центр крена. Рейка и шарнир тяги по высоте убирают подруливание.",
+  {id:"ride",t:"Клиренс",sub:"бампстир, центр крена",
+   lead:"Как <b>занижение</b> меняет развал, схождение и центр крена. Рейка и шарнир тяги по высоте убирают бампстир.",
    ctl:["ride","rackDZ","troDZ","realign"],main:"vFront",rest:["w_c7","w_c8","w_c9"],
    met:["rc","bump","gain","camber0"]},
   {id:"all",t:"Всё сразу",sub:"все виды, графики, таблица",
@@ -1007,7 +1008,7 @@ const MET={
   kpi:{n:"KPI",u:"°",d:2},
   scrub:{n:"Скраб (плечо обката)",u:"мм",d:1},
   rc:{n:"Центр крена над землёй",u:"мм",d:0},
-  bump:{n:"Подруливание на 40 мм сжатия",u:"°",d:2},
+  bump:{n:"Бампстир на 40 мм сжатия",u:"°",d:2},
   gain:{n:"Развал на 40 мм сжатия",u:"°",d:2}
 };
 let TAB="ackermann";
@@ -1130,7 +1131,7 @@ function drawAll(){
   }
   // top strip
   const put=(id,v)=>{const el=$(id);if(document.activeElement!==el)el.value=v;};
-  put("#kL",fx(CUR.L.del)+"°");put("#kR",fx(CUR.R.del)+"°");put("#kS",Math.abs(P.s)<0.01?"0":fx(P.s,1));
+  put("#kL",fx(-CUR.L.del)+"°");put("#kR",fx(-CUR.R.del)+"°");put("#kS",Math.abs(P.s)<0.01?"0":fx(-P.s,1)); // shown with + = right, like the slider
   put("#aCam",fx(M.camber0,2));put("#aCas",fx(M.caster,2));put("#aToe",fx(P.toe,2));
   const st=$("#s_toe");if(st&&document.activeElement!==st)st.value=P.toe;
   $("#kA").textContent=CUR.ack?fx(CUR.ack.ackD,0)+" %"+(CUR.ack.ackD<-0.5?" анти":""):"—";
@@ -1225,7 +1226,7 @@ function alignTo(cam,cas){
 const num=v=>{const s=String(v).replace(/[−–]/g,"-").replace(",",".").replace(/[^0-9.+\-]/g,"");return /\d/.test(s)?+s:NaN;}; // garbage → NaN, never 0
 for(const [id,k] of [["#kL","L"],["#kR","R"]]){const el=$(id);
   el.addEventListener("focus",()=>el.select());
-  el.addEventListener("change",()=>{const v=num(el.value);if(isFinite(v)){stopPlay();el.blur();steerTo(k,v);}else{el.blur();drawAll();}});
+  el.addEventListener("change",()=>{const v=num(el.value);if(isFinite(v)){stopPlay();el.blur();steerTo(k,-v);}else{el.blur();drawAll();}});
   el.addEventListener("keydown",e=>{if(e.key==="Enter")el.blur();if(e.key==="Escape"){el.value="";el.blur();drawAll();}});}
 for(const [id,fn] of [["#aCam",v=>alignTo(v,RES.M.caster)],["#aCas",v=>alignTo(RES.M.camber0,v)],
   ["#aToe",v=>{P.toe=Math.max(-3,Math.min(3,v));PDEF.toe=P.toe;$("#aMsg").textContent="";syncCtl();recompute();}]]){
@@ -1233,7 +1234,7 @@ for(const [id,fn] of [["#aCam",v=>alignTo(v,RES.M.caster)],["#aCas",v=>alignTo(R
   el.addEventListener("change",()=>{const v=num(el.value);if(isFinite(v)){stopPlay();fn(v);}else{el.blur();drawAll();}});
   el.addEventListener("keydown",e=>{if(e.key==="Enter")el.blur();if(e.key==="Escape"){el.value="";el.blur();drawAll();}});}
 {const el=$("#kS");el.addEventListener("focus",()=>el.select());
-  el.addEventListener("change",()=>{const v=num(el.value);if(isFinite(v)){stopPlay();setS(v);}else{el.blur();drawAll();}});
+  el.addEventListener("change",()=>{const v=num(el.value);if(isFinite(v)){stopPlay();setS(-v);}else{el.blur();drawAll();}});
   el.addEventListener("keydown",e=>{if(e.key==="Enter")el.blur();if(e.key==="Escape"){el.value="";el.blur();drawAll();}});}
 let playing=false,t0=0,raf=0;
 function startPlay(){playing=true;$("#play").innerHTML="❚❚<em> стоп</em>";const ph=Math.asin(Math.max(-1,Math.min(1,P.s/P.stroke)));t0=performance.now()-ph/(2*Math.PI)*6000;
