@@ -218,6 +218,26 @@ test.describe("rear anti-squat", () => {
   });
 });
 
+test.describe("share link", () => {
+  test("the hash carries the setup and a link restores it", async ({ page }) => {
+    await open(page, "camber");
+    await page.fill("#c_slot", "-1.5"); await page.press("#c_slot", "Tab");
+    await page.locator("#steer").fill("20"); await page.locator("#steer").dispatchEvent("input");
+    await expect.poll(() => page.evaluate(() => location.hash)).toContain("slot=-1.5");
+    const hash = await page.evaluate(() => location.hash);
+    expect(hash).toContain("s=-20");
+    await page.goto("http://localhost:8766/index.html" + hash);
+    await page.waitForFunction(() => typeof RES !== "undefined" && RES);
+    expect(await page.evaluate(() => [P.slot, P.s, TAB])).toEqual([-1.5, -20, "camber"]);
+    await expect(page.locator("#c_slot")).toHaveValue("-1.50");
+  });
+  test("the PNG button produces a download named after the tab", async ({ page }) => {
+    await open(page, "ackermann");
+    const [dl] = await Promise.all([page.waitForEvent("download"), page.click("#png")]);
+    expect(dl.suggestedFilename()).toBe("e46-ackermann.png");
+  });
+});
+
 test.describe("steering", () => {
   test("slider turns the wheels, centre button straightens them", async ({ page }) => {
     await open(page);

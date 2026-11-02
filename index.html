@@ -57,6 +57,8 @@ input[type=text],input[type=number]{font-variant-numeric:tabular-nums}
 .head{display:flex;justify-content:space-between;align-items:flex-end;gap:var(--s4);flex-wrap:wrap;padding:var(--s3) var(--s4) var(--s2);border-bottom:1.5px solid var(--ink)}
 .head h1{margin:0;font-style:italic;font-weight:600;font-size:clamp(24px,3vw,38px);line-height:1;text-wrap:balance}
 .head p{margin:0;font-size:var(--t-sm);color:var(--ink-2);font-style:italic}
+.hact{display:flex;gap:var(--s2);align-items:center;flex-wrap:wrap}
+.panel.tall{position:static;max-height:none;overflow:visible}
 
 /* steering strip — the primary control */
 .wheel{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);border-bottom:1.5px solid var(--ink);
@@ -239,6 +241,7 @@ details.settings summary small{font-size:var(--t-sm);color:var(--ink-2)}
   .setgrp + .setgrp{border-left:0;border-top:1px solid var(--ink-3)}
 }
 @media (pointer:coarse){
+  .setrow input,.hpt input{min-height:36px;font-size:14px}
   .drag-hint{display:none}
   .stepper button{width:var(--tap);height:var(--tap)}.stepper input{height:var(--tap);font-size:15px;width:74px} /* "−11.5" must fit */
   input[type=range]{height:36px}
@@ -296,6 +299,7 @@ details.settings summary small{font-size:var(--t-sm);color:var(--ink-2)}
 <div class="sheet">
   <header class="head">
     <h1>BMW E46 · передняя ось</h1>
+    <div class="hact"><button type="button" class="mini" id="share" title="Ссылка с текущими регулировками и вкладкой — открывается ровно в этом состоянии">⛓ поделиться ссылкой</button><button type="button" class="mini" id="png" title="Текущий вид со штампом значений — картинкой">⤓ PNG</button></div>
   </header>
 
   <div class="wheel">
@@ -413,7 +417,7 @@ function plateFrame(){
 }
 function resetP(){P={...DEF};const f=plateFrame();P.plateR=f.r0;P.plateA=f.a0;}
 resetP();
-let PDEF={...P};
+let PDEF={...P};const DEF0={...P}; // the drawing state: the plate values come from the hardpoints, not from DEF
 
 // ───────── build one side (left built in left coords, right mirrored)
 function build(side){
@@ -967,8 +971,10 @@ function drawSide(res,cur,big){
   const CPs=F.P(m.CP),gLeft=Gs[0]<CPs[0];
   mark(F,m.G,C.ink,4.5);mark(F,m.CP,C.red,5);
   dimH(F,Gs[0],CPs[0],Gs[1]+24,`трейл ${fx(m.trail,1)}`,C.red);
-  text(F,[Gs[0]+(gLeft?-10:10),Gs[1]-10],"ось в землю",C["ink-2"],{size:11.5,align:gLeft?"right":"left",clamp:true});
-  text(F,[CPs[0]+(gLeft?10:-10),CPs[1]-10],"пятно",C.red,{size:11.5,align:gLeft?"left":"right",clamp:true});
+  { // with little trail the two labels collide: lift the axis label a row
+    const close=Math.abs(Gs[0]-CPs[0])<72;
+    text(F,[Gs[0]+(gLeft?-10:10),Gs[1]-(close?26:10)],"ось в землю",C["ink-2"],{size:11.5,align:gLeft?"right":"left",clamp:true});
+    text(F,[CPs[0]+(gLeft?10:-10),CPs[1]-10],"пятно",C.red,{size:11.5,align:gLeft?"left":"right",clamp:true});}
   // mechanical trail (patch → axis) and caster offset (hub → axis), both perpendicular to the axis
   const a=F.P(fCP);seg(F,m.CP,fCP,C.mark,2.4);mark(F,fCP,C.mark,3);
   text(F,[(a[0]+CPs[0])/2,Math.min(a[1],CPs[1])-30],`мех. трейл ${fx(m.mtrail,1)}`,C["mark-ink"],{size:fs,w:600,align:"center",clamp:true});
@@ -1374,7 +1380,7 @@ function renderTabs(){
 }
 function setTab(id){
   TAB=id;try{localStorage.setItem("e46tab",id);}catch(e){}
-  try{history.replaceState(null,"","#"+id);}catch(e){}
+  try{history.replaceState(null,"","#"+id+(hashState()?"?"+hashState():""));}catch(e){}
   document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-selected",b.id==="tab_"+id));
   { // keep the selected tab visible when the tab bar scrolls sideways (phones)
     const tb=$("#tab_"+id),bar=$("#tabs");
@@ -1385,7 +1391,7 @@ function setTab(id){
   {let cv=$("#cav");if(!cv){cv=document.createElement("p");cv.id="cav";cv.className="cav";}if(t.cav){cv.innerHTML="<b>Чего модель не учитывает.</b> "+t.cav;main.appendChild(cv);}else pool.appendChild(cv);}
   for(const r of t.rest)rest.appendChild($("#"+r));
   document.querySelectorAll(".drag-hint").forEach(e=>e.hidden=!main.contains(e));
-  renderPanel();drawAll();
+  renderPanel();drawAll();setStrip();
 }
 
 // ───────── settings (expert)
@@ -1406,7 +1412,7 @@ let RES=null,BASE=null,BASEP=null,CUR=null,HOVER=null,pending=false;
 let GEN=0;const ALT={}; // alternative curves per chart, keyed by GEN // bumps whenever the curves can change, so charts keep their static layer across steering frames
 function recompute(){GEN++;RES=compute();const s=Math.max(RES.sLo,Math.min(RES.sHi,P.s));if(s!==P.s){P.s=s;}syncCtl();CUR=computeCurrent(RES);schedule();}
 function updateCurrent(){CUR=computeCurrent(RES);schedule();}
-function schedule(){if(pending)return;pending=true;requestAnimationFrame(()=>{pending=false;drawAll();});}
+function schedule(){if(pending)return;pending=true;requestAnimationFrame(()=>{pending=false;drawAll();syncHash();});}
 function setS(v){P.s=Math.max(RES?RES.sLo:-P.stroke,Math.min(RES?RES.sHi:P.stroke,v));syncCtl();updateCurrent();} // never beyond the solvable travel
 function deltaTable(){
   const t=TABS.find(x=>x.id===TAB),M=RES.M,B=BASE.M;
@@ -1502,7 +1508,9 @@ $("#steer").addEventListener("dblclick",()=>{stopPlay();setS(0);});
 $("#center").addEventListener("click",()=>{stopPlay();setS(0);});
 $("#alignTg").addEventListener("click",()=>{const w=$(".wheel"),o=w.classList.toggle("open");$("#alignTg").setAttribute("aria-expanded",o);setStrip();});
 // the tabs stick just under the steering strip, whatever its height is right now
-function setStrip(){document.documentElement.style.setProperty("--strip",$(".wheel").offsetHeight+"px");}
+function setStrip(){document.documentElement.style.setProperty("--strip",$(".wheel").offsetHeight+"px");
+  // a panel taller than the viewport scrolls with the page instead of hiding its lower controls in an inner scroll
+  const p=$("#panel");if(p&&innerWidth>640){const avail=innerHeight-$(".wheel").offsetHeight-8;p.classList.toggle("tall",p.scrollHeight>avail);}}
 window.addEventListener("resize",setStrip);setStrip();
 if(window.ResizeObserver)new ResizeObserver(setStrip).observe($(".wheel")); // fonts load late and the bar can fold/unfold
 // type a wheel angle: find the rack position that gives it (sweep bracket, then secant on the exact solve)
@@ -1629,13 +1637,45 @@ document.addEventListener("keydown",e=>{if(e.target.closest("input,textarea,sele
 // ───────── boot
 buildCharts();renderTabs();fillSettings();
 calibrateAck0();
+// a shared link carries the setup: #tab?key=value&… for every parameter that differs from the drawing
+function hashState(){const q=[];for(const k in DEF){const v=P[k],d=k in DEF0?DEF0[k]:DEF[k];if(v===d)continue;if(typeof v==="number"&&Math.abs(v-d)<1e-6)continue;q.push(k+"="+(typeof v==="number"?+v.toFixed(3):v));}
+  for(const k of ["tireD","tireW","camber"])if(CAR[k]!==CAR0[k])q.push("car."+k+"="+CAR[k]);return q.join("&");}
+let hashT=0;function syncHash(){clearTimeout(hashT);hashT=setTimeout(()=>{const h="#"+TAB+(hashState()?"?"+hashState():"");if(location.hash!==h)try{history.replaceState(null,"",h);}catch(e){}},400);}
+function applyHash(){const i=location.hash.indexOf("?");if(i<0)return;const ps=new URLSearchParams(location.hash.slice(i+1));
+  for(const [k,v] of ps){if(k.startsWith("car.")){const ck=k.slice(4);if(ck in CAR0&&isFinite(+v))CAR[ck]=+v;continue;}
+    if(!(k in DEF))continue;const d=DEF[k];
+    if(typeof d==="number"){let n=+v;if(!isFinite(n))continue;if(CTL[k])n=Math.max(CTL[k].min,Math.min(CTL[k].max,n));P[k]=n;}
+    else if(typeof d==="boolean")P[k]=v==="true";else if(typeof d==="string"&&(k!=="rCar"||REAR[v]))P[k]=v;}
+  if(CAR.tireD!==CAR0.tireD||CAR.camber!==CAR0.camber)CAR.groundZ=HP.WC[2]-CAR.tireD/2*Math.cos(CAR.camber*DEG);
+  PDEF={...P};}
+applyHash();
 RES=compute();CUR=computeCurrent(RES);BASE=RES;BASEP={...P};
 let start="ackermann";try{start=localStorage.getItem("e46tab")||start;}catch(e){}
-const hsh=location.hash.slice(1);if(TABS.some(t=>t.id===hsh))start=hsh;
+const hsh=location.hash.slice(1).split("?")[0];if(TABS.some(t=>t.id===hsh))start=hsh;
 if(!TABS.some(t=>t.id===start))start="ackermann";
 setTab(start);
 // a link with another #tab, or the browser's back button, switches tabs too
-window.addEventListener("hashchange",()=>{const h=location.hash.slice(1);if(h!==TAB&&TABS.some(t=>t.id===h))setTab(h);});
+window.addEventListener("hashchange",()=>{const h=location.hash.slice(1).split("?")[0];if(h!==TAB&&TABS.some(t=>t.id===h))setTab(h);});
+$("#share").addEventListener("click",async()=>{const b=$("#share");const h="#"+TAB+(hashState()?"?"+hashState():"");try{history.replaceState(null,"",h);}catch(e){}
+  const url=location.href;let ok=false;try{await navigator.clipboard.writeText(url);ok=true;}catch(e){}
+  const was=b.textContent;b.textContent=ok?"✓ скопировано":"скопируй из адресной строки";setTimeout(()=>{b.textContent=was;},1800);});
+$("#png").addEventListener("click",()=>{
+  // the main view with a stamp: title, the tab's key figures, the setup differences, the link
+  const t=TABS.find(x=>x.id===TAB),cv=$("#main canvas");if(!cv)return;const k=2,W=cv.clientWidth,H=cv.clientHeight;
+  const M=RES.M,figs=(t.met||[]).map(id=>`${MET[id].n} ${fx(M[id],MET[id].d)}${MET[id].u?(MET[id].u==="°"?"":" ")+MET[id].u:""}`);
+  const diffs=Object.keys(CTL).filter(id=>Math.abs(P[id]-DEF[id])>1e-9).map(id=>`${CTL[id].n}: ${fx(P[id],CTL[id].step<1?1:0)} ${CTL[id].u}`);
+  const oc=document.createElement("canvas"),ctx=oc.getContext("2d");const lines=[];
+  const wrap=(arr,font,maxW)=>{ctx.font=font;let cur="";for(const f of arr){const nx=cur?cur+" · "+f:f;if(ctx.measureText(nx).width>maxW&&cur){lines.push([cur,font]);cur=f;}else cur=nx;}if(cur)lines.push([cur,font]);};
+  oc.width=W*k;oc.height=10;ctx.scale(k,k);
+  wrap(figs,`500 12.5px ${C.fn}`,W-32);const nf=lines.length;wrap(diffs.length?diffs:["регулировки как на чертеже"],`italic 500 12.5px ${C.fl}`,W-32);
+  const top=58+lines.length*17+12,bottom=34;oc.height=(top+H+bottom)*k;ctx.setTransform(k,0,0,k,0,0);
+  ctx.fillStyle=C.paper;ctx.fillRect(0,0,W,top+H+bottom);ctx.strokeStyle=C.ink;ctx.lineWidth=1.5;ctx.strokeRect(8,8,W-16,top+H+bottom-16);
+  ctx.fillStyle=C.ink;ctx.font=`italic 600 22px ${C.fl}`;ctx.textBaseline="alphabetic";ctx.fillText(`BMW E46 · ${t.t}`,16,36);
+  ctx.font=`italic 500 12px ${C.fl}`;ctx.fillStyle=C["ink-2"];ctx.fillText(`руль ${fx(-P.s,0)} мм · ${new Date().toLocaleDateString("ru-RU")}`,W-16-ctx.measureText(`руль ${fx(-P.s,0)} мм · ${new Date().toLocaleDateString("ru-RU")}`).width,36);
+  let y=56;lines.forEach(([ln,font],i)=>{ctx.font=font;ctx.fillStyle=i<nf?C.ink:C["ink-2"];ctx.fillText(ln,16,y);y+=17;});
+  ctx.drawImage(cv,0,0,cv.width,cv.height,16,top,W-32,H*(W-32)/W);
+  ctx.font=`italic 500 11.5px ${C.fl}`;ctx.fillStyle=C["ink-2"];ctx.fillText("rakyury.github.io/e46-steering · модель кинематики по чертежу E46, оценочные точки помечены ≈",16,top+H+bottom-14);
+  const a=document.createElement("a");a.download=`e46-${TAB}.png`;a.href=oc.toDataURL("image/png");a.click();});
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(drawAll);
 new ResizeObserver(()=>schedule()).observe(document.querySelector(".stage"));
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change",drawAll);
