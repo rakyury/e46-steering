@@ -284,3 +284,26 @@ describe("computeCurrent", () => {
     K.P.s = 0; assert.equal(K.computeCurrent(r).ack, null, "no Ackermann straight ahead");
   });
 });
+
+describe("suspension-school additions", () => {
+  test("wheel offset moves scrub and spindle length one for one, camber and KPI stay", () => {
+    const a = run().M; fresh(); const b = run({ et: -10 }).M;
+    near(b.scrub - a.scrub, 10, 0.6, "scrub"); near(b.spindle - a.spindle, 10, 0.6, "spindle");
+    near(b.camber0, a.camber0, 0.05, "camber"); near(b.kpi, a.kpi, 0.05, "KPI");
+  });
+  test("steering sensitivity: a few deg per 10 mm near centre, a spike before the tie rod binds", () => {
+    const a = run().M; assert.ok(a.sensC > 5 && a.sensC < 10, "centre " + a.sensC); assert.ok(a.sensLock > a.sensC, "lock steeper");
+    fresh(); const b = run({ troDY: -25 }).M; assert.ok(b.stuck, "binds before the stroke ends"); assert.ok(b.sensLock > 3 * b.sensC, "spike " + b.sensLock);
+  });
+  test("strut motion ratio and anti-dive are in the expected range and react to caster", () => {
+    const a = run().M; assert.ok(a.mr > 0.85 && a.mr < 1.0, "mr " + a.mr); near(a.wheelRate, a.mr * a.mr * 80, 1e-6, "wheel rate = k·mr²");
+    assert.ok(a.antiDive > 2 && a.antiDive < 10, "stock anti-dive " + a.antiDive);
+    fresh(); const b = run({ plateA: 100 }).M; assert.ok(b.antiDive > a.antiDive + 3, "more caster, more anti-dive");
+  });
+  test("an extended ball joint raises the roll centre and adds bump steer", () => {
+    const a = run().M; fresh(); const b = run({ lbjDZ: 20 }).M;
+    assert.ok(b.rc > a.rc + 30, "rc up"); assert.ok(Math.abs(b.bump) > Math.abs(a.bump) * 2, "bump steer worse");
+    near(b.rcArm, 500 - b.rc, 1e-9, "roll lever from the CG height");
+  });
+  test("included angle is KPI plus camber", () => { const M = run().M; near(M.included, M.kpi + M.camber0, 1e-9); });
+});

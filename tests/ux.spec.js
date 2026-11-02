@@ -169,6 +169,40 @@ test.describe("presets", () => {
   });
 });
 
+test.describe("school additions", () => {
+  test("sensitivity chart, drift plan, scenarios and caveats on the Ackermann tab", async ({ page }) => {
+    await open(page, "ackermann");
+    await expect(page.locator("#w_c12")).toBeVisible();
+    await expect(page.locator("#cav")).toContainText("не учитывает");
+    await page.click('.sc[data-i="2"]'); // drift 35°, counter-steer
+    await expect.poll(() => page.evaluate(() => P.drift)).toBe(35);
+    await expect.poll(() => page.evaluate(() => P.s)).toBeCloseTo(-40, 0);
+    await expect(page.locator("#nPlan")).toContainText("Дрифт");
+    await page.click('.sc[data-i="1"]'); // anti at lock
+    await expect.poll(() => page.evaluate(() => P.troDY)).toBe(-15);
+    await expect.poll(() => page.evaluate(() => Math.abs(P.s - -RES.sHi) < 0.01)).toBe(true);
+    expect(await page.evaluate(() => RES.M.sensLock > RES.M.sensC)).toBe(true);
+    expect(await page.textContent("#w_c3 .altlg")).toContain("тонкие");
+  });
+  test("wheel offset, ball-joint height, strut tab and the bump-steer tool", async ({ page }) => {
+    await open(page, "camber");
+    const scrub0 = await page.evaluate(() => RES.M.scrub);
+    await page.fill("#c_et", "-10"); await page.press("#c_et", "Tab");
+    await expect.poll(() => page.evaluate(() => RES.M.scrub)).toBeGreaterThan(scrub0 + 9);
+    await open(page, "strut");
+    await expect(page.locator("#w_c13")).toBeVisible(); await expect(page.locator("#w_c14")).toBeVisible();
+    expect(await page.evaluate(() => RES.M.mr)).toBeGreaterThan(0.85);
+    expect(await page.evaluate(() => RES.M.antiDive)).toBeGreaterThan(0);
+    await open(page, "ride");
+    const rc0 = await page.evaluate(() => RES.M.rc);
+    await page.fill("#c_lbjDZ", "20"); await page.press("#c_lbjDZ", "Tab");
+    await expect.poll(() => page.evaluate(() => RES.M.rc)).toBeGreaterThan(rc0 + 30);
+    await page.click('.tool[data-i="0"]');
+    await expect.poll(() => page.evaluate(() => Math.abs(RES.M.bump)), { timeout: 15000 }).toBeLessThan(0.05);
+    await expect(page.locator("#toolMsg")).toContainText("≈ 0");
+  });
+});
+
 test.describe("steering", () => {
   test("slider turns the wheels, centre button straightens them", async ({ page }) => {
     await open(page);

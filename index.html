@@ -143,6 +143,14 @@ input[type=range]::-moz-range-thumb{width:18px;height:20px;background:var(--red)
 /* change vs base */
 .delta{padding:var(--s3) var(--s4) var(--s4);border-bottom:1px solid var(--ink-3)}
 .preset{padding:var(--s2) var(--s4);border-bottom:1px solid var(--ink-3);display:grid;gap:4px}
+.tools{padding:var(--s3) var(--s4);border-bottom:1px solid var(--ink-3);display:grid;gap:var(--s2)}
+.scen{display:flex;flex-wrap:wrap;gap:6px;padding-top:4px}
+.scen .mini{font-style:italic}
+.cav{margin:0;padding:var(--s2) var(--s4) var(--s3);font-size:var(--t-sm);color:var(--ink-2);line-height:1.4;border-top:1px dashed var(--ink-3)}
+.cav b{color:var(--ink);font-weight:600}
+.tools h2{margin:0;font-size:var(--t-xs);font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2)}
+.tools .tool{text-align:left;font-style:italic}
+.tools .note{margin:0;font-size:var(--t-sm);color:var(--ink-2)}
 .preset label{display:flex;align-items:center;gap:var(--s2);font-size:var(--t-xs);font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2)}
 .preset select{flex:1;min-width:0;font:inherit;font-size:var(--t-md);font-style:italic;letter-spacing:0;text-transform:none;font-weight:500;color:var(--ink);background:transparent;border:0;border-bottom:1px solid var(--ink-2);padding:3px 0;cursor:pointer;border-radius:0;min-height:32px}
 .preset select option{background:var(--paper);color:var(--ink)}
@@ -382,13 +390,13 @@ const HP0={
   SLOTP:{n:"Болт слота стакана",p:[20,709,234],est:1},
   WC:{n:"Центр ступицы",p:[20.9,830.3,146.9]}
 };
-const CAR0={groundZ:-167.72,camber:-4.69,tireW:245};
+const CAR0={groundZ:-167.72,camber:-4.69,tireW:245,tireD:631}; // tireD: rolling diameter that puts the drawing's hub at its height over the ground
 let HP={};const resetHP=()=>{for(const k in HP0)HP[k]=HP0[k].p.slice();};resetHP();
 let CAR={...CAR0};
 
 // ───────── adjustable parameters
 let ACK0=0; // tie-rod joint offset (mm, outboard) at which the steering is parallel near centre; found by calibrateAck0()
-const DEF={s:0,stroke:60,rackDX:0,rackDZ:0,troDX:0,troDY:0,troDZ:0,lbjDX:0,lbjDY:0,lolly:0,plateR:0,plateA:0,slot:0,ride:0,roll:0,rollShare:55,toe:0,wheelbase:2725,realign:false};
+const DEF={s:0,stroke:60,rackDX:0,rackDZ:0,troDX:0,troDY:0,troDZ:0,lbjDX:0,lbjDY:0,lolly:0,plateR:0,plateA:0,slot:0,ride:0,roll:0,rollShare:55,et:0,lbjDZ:0,drift:0,cgH:500,brakeF:66,spring:80,toe:0,wheelbase:2725,realign:false};
 let P={};
 function plateFrame(){
   const u0=nrm(sub(HP.TOP,HP.DLOW));
@@ -416,9 +424,9 @@ function build(side){
   const L={
     AF:HP.AF,AR:swing(HP.AR),T,
     LBJa:swing(HP.LBJ),
-    LBJk:add(HP.LBJ,[P.lbjDX,P.lbjDY,0]),
+    LBJk:add(HP.LBJ,[P.lbjDX,P.lbjDY,-P.lbjDZ]), // lbjDZ: + = the joint sits lower in the knuckle (extended ball joint)
     TROk:add(HP.TRO,[P.troDX,P.troDY+ACK0,P.troDZ]), // ACK0: the control's zero is parallel steer, not the drawing
-    Dk,uk,WCk:HP.WC,ak:[0,Math.cos(c),-Math.sin(c)],
+    Dk,uk,ak:[0,Math.cos(c),-Math.sin(c)],WCk:add(HP.WC,mul([0,Math.cos(c),-Math.sin(c)],-P.et)), // ET: + tucks the wheel in, − pushes it out along the hub axis
     TRI0:add(HP.TRI,[P.rackDX,0,P.rackDZ]),
     plateC:HP.PLATE.slice()
   };
@@ -486,7 +494,8 @@ function sideMeas(p,gz){
   const perp=Q=>(dot(sub(Q,p.LBJ),f)*dz-(Q[2]-p.LBJ[2])*df)/dl;
   return {p,CP,G,camber,del:del/DEG,f,lat,dir,
     trail:dot(sub(G,CP),f), mtrail:-perp(CP), coff:-perp(p.WC), scrub:dot(sub(CP,G),lat),
-    caster:Math.atan2(-df,dz)/DEG, kpi:Math.atan2(-dot(dir,lat),dz)/DEG, jack:gAt(gz,CP[1])-CP[2]};
+    caster:Math.atan2(-df,dz)/DEG, kpi:Math.atan2(-dot(dir,lat),dz)/DEG, jack:gAt(gz,CP[1])-CP[2],
+    spindle:Math.abs(p.WC[1]-(p.LBJ[1]+dir[1]*(p.WC[2]-p.LBJ[2])/dir[2]))};
 }
 // the road runs through both contact patches: the body roll to it (left side up = +) and the camber each wheel
 // really has to the road, which is what a tyre feels; the body-relative figure stays as camberBody
@@ -512,6 +521,14 @@ function settle(gL,gR,qL,qR,s,gnd){
     t-=r/(2+4*c);
   }
   return {qL,qR};
+}
+function antiDive(p,g,gz){
+  const d=g.axisK,u=p.u;const l1=[p.LBJ[0],p.LBJ[2],d[0],d[2]],l2=[p.T[0],p.T[2],-u[2],u[0]]; // x,z,dx,dz
+  const den=l1[2]*l2[3]-l1[3]*l2[2];if(Math.abs(den)<1e-9)return null;
+  const t=((l2[0]-l1[0])*l2[3]-(l2[1]-l1[1])*l2[2])/den;const ic=[l1[0]+l1[2]*t,l1[1]+l1[3]*t];
+  const cp=cpOf(p);const back=cp[0]-ic[0],h=ic[1]-gz;if(Math.abs(back)<1e-6)return null;
+  const tan=h/back;const pct=tan*(P.wheelbase/P.cgH)*(P.brakeF/100)*100;
+  return {ic,back,h,pct,tan};
 }
 function icOf(p,g){
   const x0=HP.WC[0];
@@ -605,6 +622,8 @@ function compute(quick){ // quick: only the first few mm of a left turn, for cal
     }
   }
   out.sw=sw;
+  for(let i=1;i<sw.length-1;i++){const a=sw[i-1],b=sw[i+1],q=sw[i];if(!a||a.bad||!b||b.bad||!q||q.bad)continue;
+    const ds=b.s-a.s;q.sensL=Math.abs(b.L.del-a.L.del)/ds*10;q.sensR=Math.abs(b.R.del-a.R.del)/ds*10;}
   if(quick)return out;
   // solvable rack travel (the tie rod can reach its dead point before the stroke ends)
   let lo=N,hi=N;while(hi<2*N&&sw[hi+1]&&!sw[hi+1].bad)hi++;while(lo>0&&sw[lo-1]&&!sw[lo-1].bad)lo--;
@@ -616,9 +635,11 @@ function compute(quick){ // quick: only the first few mm of a left turn, for cal
       if(!a.ok||!b.ok)break;a0=a.q;b0=b.q;
       const pl=pose(gL,a.q,0),pr=pose(gR,b.q,0);
       const gzt=cpOf(pl)[2];const mL=sideMeas(pl,gzt),mR=sideMeas(pr,gzt);
-      bt.push({t,toe:-mL.del,camber:mL.camber,rc:rollCenter(mL,mR,gL,gR,gzt)});}};
+      bt.push({t,toe:-mL.del,camber:mL.camber,rc:rollCenter(mL,mR,gL,gR,gzt),strut:len(sub(pl.T,pl.D)),ad:antiDive(pl,gL,gzt)});}};
   runB(travel);runB(travel.slice(1).map(v=>-v));
   bt.sort((a,b)=>a.t-b.t);out.bt=bt;
+  // strut motion ratio: strut compression per wheel travel, from neighbouring rows
+  for(let i=0;i<bt.length;i++){const a=bt[Math.max(0,i-1)],b=bt[Math.min(bt.length-1,i+1)];if(b.t===a.t)continue;bt[i].mr=-(b.strut-a.strut)/(b.t-a.t);}
   // body roll sweep at straight-ahead: the wheels travel in antiphase, figures are to the road, not the body
   const rt=[];const HT=Math.abs(HP.WC[1]);
   const runR=(list)=>{let a0=gL.qs,b0=gR.qs;for(const ph of list){
@@ -663,7 +684,11 @@ function metrics(res){
     rc:b0&&b0.rc?b0.rc.h:NaN,
     bump:b0&&b40?b40.toe-b0.toe:NaN, gain:b0&&b40?b40.camber-b0.camber:NaN,
     rollCam:r2?r2.camR:NaN, rollToe:r2&&r0?r2.toeR-r0.toeR:NaN,
-    tie:res.gL.Ltie
+    tie:res.gL.Ltie,
+    included:m0.kpi+m0.camber, spindle:m0.spindle,
+    rcArm:b0&&b0.rc?P.cgH-b0.rc.h:NaN, mr:b0?b0.mr:NaN, wheelRate:b0?P.spring*b0.mr*b0.mr:NaN,
+    antiDive:b0&&b0.ad?b0.ad.pct:NaN, icBack:b0&&b0.ad?b0.ad.back/1000:NaN, icH:b0&&b0.ad?b0.ad.h:NaN,
+    sensC:c.sensL||NaN, sensLock:Math.max(lk.sensL||(sw[li-1]&&sw[li-1].sensL)||0,lk.sensR||(sw[li-1]&&sw[li-1].sensR)||0)||NaN
   };
 }
 // the tie-rod joint offset at which the real steering is parallel near centre (0 % static Ackermann),
@@ -790,6 +815,8 @@ function drawTop(res,cur,big){
   const {gL,gR}=res;
   seg2(F,F.S([0,-470]),F.S([0,410]),C["ink-3"],0.8,CL);
   seg2(F,F.S([-1180,HP.WC[0]]),F.S([1180,HP.WC[0]]),C["ink-3"],0.8,CL);
+  // the car's nose from above: sills and the bumper, so the wheels sit in a car
+  polyline(F,[[-470,890,0],[560,890,0],[760,760,0],[820,0,0],[760,-760,0],[560,-890,0],[-470,-890,0]].map(v=>[HP.WC[0]+v[0]-20,v[1],0]),C["ink-3"],1,[7,5]);
   for(const [k,col] of [["L",C.red],["R",C.blue]])polyline(F,res.sw.map(r=>r&&!r.bad?r[k].CP:null),col,1,[2,3]);
   wheelPlan(F,cur.L,C.red);wheelPlan(F,cur.R,C.blue);
   patch(F,cur.L,C.red);patch(F,cur.R,C.blue);
@@ -826,6 +853,10 @@ function drawFront(res,cur,big){
   const F=frame($("#vFront canvas"),[-1160,1160,-60,880],p=>[(p[1]-c2[1])*cf+(p[2]-c2[2])*sf-um,-(p[1]-c2[1])*sf+(p[2]-c2[2])*cf]);
   ground(F,0,-1160,1160);
   seg(F,[0,0,res.gz-40],[0,0,res.gz+880],C["ink-3"],0.8,CL);
+  { // body from the front: sills, fenders and the hood, in the body frame so it lifts and rolls with the car
+    const z=res.gz;const body=[[-900,z+190],[-900,z+640],[-820,z+730],[-520,z+780],[520,z+780],[820,z+730],[900,z+640],[900,z+190]];
+    polyline(F,body.map(([y,zz])=>[0,y,zz]),C["ink-3"],1,[7,5]);
+    for(const sd of [1,-1]){const w=sd>0?cur.L.p.WC:cur.R.p.WC;const arc=[];for(let i=0;i<=16;i++){const t=Math.PI*i/16;arc.push([0,w[1]+Math.cos(t)*(R+75)*(sd>0?1:1),w[2]+Math.sin(t)*(R+75)]);}polyline(F,arc,C["ink-3"],1,[7,5]);}}
   const lift=(cur.L.jack+cur.R.jack)/2;
   if(lift>0.5||Math.abs(cur.L.roll)>0.05){const str=`кузов${lift>0.5?` поднят на ${lift.toFixed(1)} мм`:""}${Math.abs(cur.L.roll)>0.05?`${lift>0.5?",":""} крен ${fx(cur.L.roll,2)}°`:""}`;const xy=[F.S([0,0])[0],F.S([0,0])[1]+24];
     text(F,xy,str,C["ink-2"],{size:12,align:"center"});if(big)info(F,xy[0]+F.ctx.measureText(str).width/2+14,xy[1],"jack");}
@@ -864,6 +895,11 @@ function drawSide(res,cur,big){
   const F=frame(cv,[-400,400,-70,830],proj);
   const c=F.ctx,wide=F.W>520,fs=wide?14:12.5;
   ground(F,0,-1000,1000);
+  { // fender arch and sill from the side
+    const w=p.WC,arc=[];for(let i=0;i<=20;i++){const t=Math.PI*0.08+Math.PI*0.84*i/20;arc.push([w[0]+Math.cos(t)*(R+75),w[1],w[2]+Math.sin(t)*(R+75)]);}
+    polyline(F,arc,C["ink-3"],1,[7,5]);
+    polyline(F,[[w[0]+(R+75)*Math.cos(Math.PI*0.92),w[1],gzw+190],[w[0]-420,w[1],gzw+190]],C["ink-3"],1,[7,5]);
+    polyline(F,[[w[0]+(R+75)*Math.cos(Math.PI*0.08),w[1],gzw+190],[w[0]+420,w[1],gzw+190]],C["ink-3"],1,[7,5]);}
   // wheel: one clean circle (the projection on its own plane) with the rim
   const Ws=F.P(p.WC),Rp=R*F.sc;
   c.beginPath();c.arc(Ws[0],Ws[1],Rp,0,2*Math.PI);c.fillStyle=C.fill;c.fill();c.strokeStyle=C.red;c.lineWidth=1.6;c.stroke();
@@ -900,12 +936,35 @@ function drawSide(res,cur,big){
   text(F,[Ws[0],Ws[1]+30],`кастер-офсет ${fx(m.coff,1)}`,C["mark-ink"],{size:fs,w:600,align:"center",clamp:true});
   text(F,[10,topY+14],"← вперёд",C["ink-2"],{size:12});
   if(m.jack>0.5)text(F,[F.W-8,Gs[1]+46],`кузов поднят на ${m.jack.toFixed(1)} мм`,C["ink-2"],{size:12,align:"right"});
+  if(big&&TAB==="strut"){const ad=antiDive(p,res.gL,gzw);
+    if(ad){const Y=p.LBJ[1],IC=[ad.ic[0],Y,ad.ic[1]],CPp=[m.CP[0],Y,gzw];
+      const far=(a,b,L)=>add(a,mul(nrm(sub(b,a)),L));
+      seg(F,far(p.LBJ,IC,-300),far(p.LBJ,IC,2200),C["ink-3"],0.9,[6,4]);seg(F,far(p.T,IC,-300),far(p.T,IC,2200),C["ink-3"],0.9,[6,4]);
+      seg(F,CPp,far(CPp,IC,2400),C.mark,2);
+      const k=P.cgH/P.wheelbase*(P.brakeF/100);seg(F,CPp,add(CPp,[-2400,0,2400*k]),C["ink-2"],1,[2,4]);
+      text(F,[F.W-8,topY+14],`anti-dive ${fx(ad.pct,0)} % · МЦ ${fx(ad.back/1000,2)} м назад, ${fx(ad.h,0)} мм`,C["mark-ink"],{size:12.5,w:600,align:"right"});
+      text(F,[F.W-8,topY+30],"оранжевая — линия силы от пятна через МЦ, пунктир — 100 %",C["ink-2"],{size:11,align:"right"});}}
   if(big)handle(F,p.WC,"knuckle","кулак ↔︎","h");else mark(F,p.WC,C.red);
 }
+// steady drift around one centre: the lead wheel (inner to the steer, outside of the corner, carrying the front) rolls
+// with no slip, the rear axle midpoint moves at the body slip angle; the centre is where their perpendiculars cross,
+// and the trail wheel's slip is the angle between its heading and the tangent of its own circle
+function driftGeom(cur){
+  const a=cur.ack;if(!a||!(P.drift>0))return null;
+  const m=a.m,lead=m>0?cur.L:cur.R,trail=m>0?cur.R:cur.L;const xr=HP.WC[0]-P.wheelbase;
+  const b=P.drift*DEG,v=[Math.cos(b),m*Math.sin(b)]; // velocity of the rear midpoint: the nose is yawed into the corner, away from the steer
+  const pl=[lead.CP[0],lead.CP[1]],nl=[-lead.f[1],lead.f[0]];
+  const C=lineX(pl,[pl[0]+nl[0],pl[1]+nl[1]],[xr,0],[xr-v[1],v[0]]);if(!C)return null;
+  const side=-m; if(Math.sign(C[1])!==side||Math.hypot(C[0],C[1])>60000)return {bad:true,m};  // centre must lie on the corner side
+  const tang=q=>{let t=[-(q[1]-C[1]),q[0]-C[0]];const n=Math.hypot(t[0],t[1]);t=[t[0]/n,t[1]/n];if(t[0]<0)t=[-t[0],-t[1]];return t;};
+  const tt=tang([trail.CP[0],trail.CP[1]]);const ideal=Math.atan2(tt[1],tt[0])/DEG;const slip=trail.del-ideal;
+  const R=Math.hypot(pl[0]-C[0],pl[1]-C[1])/1000;
+  return {C,m,lead,trail,v,ideal,slip,R,leadDel:lead.del,trailDel:trail.del};
+}
 function drawPlan(res,cur){
-  const L=P.wheelbase,x0=HP.WC[0],xr=x0-L;const a=cur.ack;
+  const L=P.wheelbase,x0=HP.WC[0],xr=x0-L;const a=cur.ack;const dg=driftGeom(cur);
   // frame the car plus the turn centres on the rear axle (capped so a near-straight wheel doesn't shrink the car to a dot)
-  const us=[-1000,1000];if(a)for(const y of [a.cI[1],a.cO[1]])us.push(Math.max(-7000,Math.min(7000,-y)));
+  const us=[-1000,1000];if(dg&&!dg.bad)us.push(Math.max(-7000,Math.min(7000,-dg.C[1])));else if(a)for(const y of [a.cI[1],a.cO[1]])us.push(Math.max(-7000,Math.min(7000,-y)));
   const F=frame($("#vPlan canvas"),[Math.min(...us)-350,Math.max(...us)+350,xr-950,x0+1250],p=>[-p[1],p[0]]);
   const body=[[x0+880,760],[x0+880,-760],[xr-860,-760],[xr-860,760],[x0+880,760]].map(v=>[v[0],v[1],0]);
   polyline(F,body,C["ink-3"],1);
@@ -914,7 +973,20 @@ function drawPlan(res,cur){
   for(const [mm,col] of [[cur.L,C.red],[cur.R,C.blue]]){
     const f=mm.f,l=mm.lat,cp=mm.CP;polyline(F,[[1,1],[1,-1],[-1,-1],[-1,1],[1,1]].map(([a,b])=>add(add(cp,mul(f,a*315)),mul(l,b*120))),col,1.4);
   }
-  if(a){
+  if(dg){
+    const wide=F.W>560;
+    if(dg.bad){const ld=dg.m>0?cur.L:cur.R;text(F,[F.W/2,F.H-28],`контр-руль круче угла скольжения: ведущее ${fx(Math.abs(ld.del),1)}° против ${P.drift}° бокового хода`,C.ink,{align:"center",size:13,clamp:true});text(F,[F.W/2,F.H-10],"передок смотрит наружу поворота, машина распрямляется — центра на стороне поворота нет",C["ink-2"],{align:"center",size:12.5,clamp:true});return;}
+    const Cp=[dg.C[0],dg.C[1],0],leC=dg.m>0?C.red:C.blue,trC=dg.m>0?C.blue:C.red;
+    seg(F,dg.lead.CP,Cp,leC,1,[6,3]);seg(F,dg.trail.CP,Cp,trC,1,[6,3]);seg(F,[xr,0,0],Cp,C["ink-2"],1,[2,3]);
+    mark(F,Cp,C.mark,5);
+    // velocity of the rear midpoint and of the trail wheel's patch; the trail wheel's clean heading as a thin wedge
+    const va=[xr,0,0],vb=[xr+dg.v[0]*700,dg.v[1]*700,0];seg(F,va,vb,C.mark,2.2);mark(F,vb,C.mark,3);
+    const id=dg.ideal*DEG,tf=[Math.cos(id),Math.sin(id),0];seg(F,add(dg.trail.CP,mul(tf,-380)),add(dg.trail.CP,mul(tf,380)),C.mark,1.4,[8,4]);
+    text(F,F.P(add(va,[-260,0,0])),`скольжение ${P.drift}°`,C["mark-ink"],{align:"center",size:12,w:600});
+    const need=Math.abs(dg.ideal)-Math.abs(dg.leadDel);
+    text(F,[F.W/2,F.H-28],`${wide?"дрифт: ":""}ведущее ${fx(Math.abs(dg.leadDel),1)}° катится чисто, R ${dg.R.toFixed(1)} м · ведомое ${fx(Math.abs(dg.trailDel),1)}° идёт с уводом <${fx(dg.slip,1)}>°`.replace(/[<>]/g,""),C.ink,{align:"center",size:13.5,clamp:true});
+    text(F,[F.W/2,F.H-10],`чтобы и ведомое катилось чисто, ему нужно ${fx(Math.abs(dg.ideal),1)}° — на ${fx(Math.abs(need),1)}° ${need>0?"больше ведущего (анти-Аккерман)":"меньше ведущего (положительный Аккерман)"}`,C["ink-2"],{align:"center",size:12.5,clamp:true});
+  } else if(a){
     const inn=a.m>0?cur.L:cur.R,out=a.m>0?cur.R:cur.L;
     const inC=a.m>0?C.red:C.blue,ouC=a.m>0?C.blue:C.red;
     seg(F,inn.CP,[a.cI[0],a.cI[1],0],inC,1,[6,3]);
@@ -975,10 +1047,11 @@ function chart(cv,o){
   cv._map={x0,x1,l:m.l,pw};
 }
 const ok=q=>q&&!q.bad;
+const sensAt=(r,s,k)=>{let b=null;for(const q of r.sw)if(ok(q)&&q["sens"+k]!=null&&(!b||Math.abs(q.s-s)<Math.abs(b.s-s)))b=q;return b?b["sens"+k]:NaN;};
 const fx=(v,d=1)=>{if(!isFinite(v))return "—";const a=Math.abs(v).toFixed(d);return (v<0&&+a!==0?"−":"")+a;}; // no "−0.0"
 // x for steering charts is "wheel left ← → right", i.e. minus rack position
 const CH=[
-  {id:"c3",t:"Аккерман по углу поворота",xl:"угол внутреннего колеса, °",yl:"%",cur:"di",y0:0,minSpan:40,
+  {id:"c3",t:"Аккерман по углу поворота",xl:"угол внутреннего колеса, °",yl:"%",cur:"di",y0:0,minSpan:40,alt:{key:"troDY",vals:[-15,15],n:"шарнир тяги внутрь / наружу на 15 мм"},
    lg:[["Аккерман (по реальным пятнам)","mark"],["по классической формуле","ink-2","d"]],
    ser:(r,g)=>{const pos=r.sw.filter(q=>ok(q)&&q.s>0&&q.ack);return [{pts:pos.map(q=>[q.ack.di,q.ack.ackD]),c:C.mark,w:2.6},{pts:pos.map(q=>[q.ack.di,q.ack.ackC]),c:C["ink-2"],d:[6,4],w:1.4}];},
    dots:c=>c.ack?[c.ack.ackD,c.ack.ackC]:[],
@@ -993,12 +1066,17 @@ const CH=[
    lg:[["левое","red"],["правое","blue"]],
    ser:r=>[{pts:r.sw.map(q=>ok(q)?[-q.s,q.L.del]:null),c:C.red},{pts:r.sw.map(q=>ok(q)?[-q.s,q.R.del]:null),c:C.blue}],
    dots:c=>[c.L.del,c.R.del],note:M=>`Лок <b>${fx(M.lockIn)}°</b> / <b>${fx(M.lockOut)}°</b>.`},
-  {id:"c2",t:"Развал при повороте",xl:"← влево · руль · вправо →",yl:"развал, °",cur:"s",minSpan:2,
+  {id:"c12",t:"Чувствительность руля и заклинивание",xl:"← влево · руль · вправо →",yl:"° колеса на 10 мм рейки",cur:"s",y0:0,minSpan:4,
+   lg:[["левое","red"],["правое","blue"]],
+   ser:r=>[{pts:r.sw.map(q=>ok(q)&&q.sensL!=null?[-q.s,q.sensL]:null),c:C.red},{pts:r.sw.map(q=>ok(q)&&q.sensR!=null?[-q.s,q.sensR]:null),c:C.blue}],
+   dots:c=>[sensAt(RES,c.s,"L"),sensAt(RES,c.s,"R")],
+   note:M=>`У центра <b>${fx(M.sensC,2)}°</b> на 10 мм рейки, у лока <b>${fx(M.sensLock,2)}°</b>. Когда тяга и рычаг кулака раскрываются в прямую линию, рейка почти стоит, а колесо летит: кривая уходит вверх — это <b>переход через центр</b>, тяга теряет рычаг и колесо клинит.${M.stuck?" <b>Здесь тяга доходит до мёртвой точки раньше конца хода рейки.</b>":M.sensLock>3*M.sensC?" <b>У лока чувствительность втрое выше центра — близко к заклиниванию, нужен жёсткий упор.</b>":""}`},
+  {id:"c2",t:"Развал при повороте",xl:"← влево · руль · вправо →",yl:"развал, °",cur:"s",minSpan:2,alt:{key:"plateR",vals:[45,85],n:"эксцентриситет опоры 45 / 85 мм"},
    lg:[["левое","red"],["правое","blue"]],
    ser:r=>[{pts:r.sw.map(q=>ok(q)?[-q.s,q.L.camber]:null),c:C.red},{pts:r.sw.map(q=>ok(q)?[-q.s,q.R.camber]:null),c:C.blue}],
    dots:c=>[c.L.camber,c.R.camber],
    note:M=>`Стоя <b>${fx(M.camber0,2)}°</b>. На локе внутреннее <b>${fx(M.camberIn,2)}°</b>, наружное <b>${fx(M.camberOut,2)}°</b>.`},
-  {id:"c5",t:"Трейл и скраб левого колеса",xl:"← влево · руль · вправо →",yl:"мм",cur:"s",
+  {id:"c5",t:"Трейл и скраб левого колеса",xl:"← влево · руль · вправо →",yl:"мм",cur:"s",alt:{key:"lbjDX",vals:[-20,20],n:"шаровая вперёд / назад на 20 мм"},
    lg:[["мех. трейл","mark"],["трейл по земле","ink"],["скраб","ink-2","d"]],
    ser:r=>[{pts:r.sw.map(q=>ok(q)?[-q.s,q.L.mtrail]:null),c:C.mark,w:2.6},{pts:r.sw.map(q=>ok(q)?[-q.s,q.L.trail]:null),c:C.ink,w:1.4},{pts:r.sw.map(q=>ok(q)?[-q.s,q.L.scrub]:null),c:C["ink-2"],d:[6,4],w:1.4}],
    dots:c=>[c.L.mtrail,c.L.trail,c.L.scrub],
@@ -1007,7 +1085,7 @@ const CH=[
    lg:[["левое","red"],["правое","blue"]],
    ser:r=>[{pts:r.sw.map(q=>ok(q)?[-q.s,q.L.jack]:null),c:C.red},{pts:r.sw.map(q=>ok(q)?[-q.s,q.R.jack]:null),c:C.blue}],
    dots:c=>[c.L.jack,c.R.jack],note:M=>`На локе передок поднимается на <b>${fx(M.jack)} мм</b> и кренится на <b>${fx(Math.abs(M.lockRoll),2)}°</b> к наружной стороне: внутреннее колесо поднимает кузов сильнее. Подъём создаёт возвращающий момент на руле.`},
-  {id:"c7",t:"Бампстир — подруливание при ходе подвески",xl:"ход колеса, мм (+ сжатие)",yl:"схождение, °",cur:"t",minSpan:0.4,
+  {id:"c7",t:"Бампстир — подруливание при ходе подвески",xl:"ход колеса, мм (+ сжатие)",yl:"схождение, °",cur:"t",minSpan:0.4,alt:{key:"rackDZ",vals:[-15,15],n:"рейка ниже / выше на 15 мм"},
    lg:[["левое колесо, руль прямо","red"]],
    ser:r=>[{pts:r.bt.map(q=>[q.t,q.toe]),c:C.red}],dots:()=>[],
    note:M=>`На 40 мм сжатия: <b>${fx(M.bump,2)}°</b> (+ в схождение). Зависит от высоты рейки и шарнира тяги.`},
@@ -1023,6 +1101,14 @@ const CH=[
    lg:[["левое","red"],["правое","blue"]],
    ser:r=>[{pts:r.rt.map(q=>[q.ph,q.toeL]),c:C.red},{pts:r.rt.map(q=>[q.ph,q.toeR]),c:C.blue}],dots:()=>[],
    note:M=>`При крене 2° наружное колесо подруливает на <b>${fx(M.rollToe,2)}°</b> (+ в схождение), внутреннее — в другую сторону. Это бампстир, каким он приходит на входе в поворот.`},
+  {id:"c13",t:"Motion ratio стойки",xl:"ход колеса, мм (+ сжатие)",yl:"ход стойки / ход колеса",cur:"t",minSpan:0.1,
+   lg:[["стойка","mark"]],
+   ser:r=>[{pts:r.bt.filter(q=>q.mr!=null).map(q=>[q.t,q.mr]),c:C.mark,w:2.4}],dots:()=>[],
+   note:M=>`Стоя <b>${fx(M.mr,3)}</b>: на миллиметр хода колеса стойка сжимается на ${fx(M.mr,3)} мм. Пружина ${P.spring} Н/мм даёт на колесе <b>${fx(M.wheelRate,1)} Н/мм</b> (жёсткость × ratio²). У стойки ratio близок к 1 и задан её наклоном; кастер и развальная плита его двигают.`},
+  {id:"c14",t:"Anti-dive при клевке",xl:"ход колеса, мм (+ сжатие = клевок)",yl:"%",cur:"t",y0:0,minSpan:20,alt:{key:"plateA",vals:[45,90],n:"плита 45° / 90°"},
+   lg:[["anti-dive","mark"]],
+   ser:r=>[{pts:r.bt.filter(q=>q.ad).map(q=>[q.t,q.ad.pct]),c:C.mark,w:2.4}],dots:()=>[],
+   note:M=>`Стоя <b>${fx(M.antiDive,0)} %</b>: мгновенный центр в боковой проекции ${fx(M.icBack,2)} м позади пятна и ${fx(M.icH,0)} мм над землёй; линия от пятна через него против линии «100 %» (ЦТ ${P.cgH} мм на базу ${P.wheelbase} мм) при ${P.brakeF} % тормозов на переде. Ось рычага и наклон стойки задают его: лолипоп и поворот плиты двигают.`},
   {id:"c9",t:"Высота центра крена",xl:"ход колёс, мм (+ сжатие)",yl:"от земли, мм",cur:"t",minSpan:20,
    lg:[["центр крена","mark"]],
    ser:r=>[{pts:r.bt.map(q=>q.rc?[q.t,q.rc.h]:null),c:C.mark,w:2.6}],dots:()=>[],
@@ -1031,7 +1117,7 @@ const CH=[
 function buildCharts(){
   const pool=$("#pool");
   for(const c of CH){const el=document.createElement("div");el.className="fig ch";el.id="w_"+c.id;
-    el.innerHTML=`<h3>${c.t}</h3><p class="note" id="n_${c.id}"></p><div class="lg">${c.lg.map(([n,col,d])=>`<span><i style="border-top-color:var(--${col});${d?"border-top-style:dashed":""}"></i>${n}</span>`).join("")}<span class="ghostlg"><i style="border-top-color:var(--mark);border-top-style:dotted;border-top-width:3px"></i>база</span></div><canvas id="${c.id}" aria-label="${c.t}"></canvas>`;
+    el.innerHTML=`<h3>${c.t}</h3><p class="note" id="n_${c.id}"></p><div class="lg">${c.lg.map(([n,col,d])=>`<span><i style="border-top-color:var(--${col});${d?"border-top-style:dashed":""}"></i>${n}</span>`).join("")}<span class="ghostlg"><i style="border-top-color:var(--mark);border-top-style:dotted;border-top-width:3px"></i>база</span>${c.alt?'<span class="altlg" style="color:var(--ink-2)"></span>':""}</div><canvas id="${c.id}" aria-label="${c.t}"></canvas>`;
     pool.appendChild(el);
     if(c.cur==="s"){const cv=el.querySelector("canvas");
       const pick=e=>{const mp=cv._map;if(!mp)return;const r=cv.getBoundingClientRect();const x=mp.x0+(e.clientX-r.left-mp.l)/mp.pw*(mp.x1-mp.x0);setS(Math.max(-P.stroke,Math.min(P.stroke,-x)));};
@@ -1048,16 +1134,19 @@ function buildCharts(){
 
 // ───────── adjustments
 const CTL={
+  drift:{n:"Угол скольжения кузова (дрифт)",min:0,max:45,step:1,u:"°",h:"0 — обычный поворот. В дрифте машина идёт боком под этим углом, руль в противоход: ведущее колесо — внутреннее по рулю, оно нагружено и катится чисто; на плане видно, с каким уводом идёт ведомое."},
   rackDX:{n:"Рейка вперёд / назад",min:-80,max:80,step:1,u:"мм",h:"Вперёд — Аккерман на большом угле падает, назад — растёт. Тяни «рейку» на виде сверху."},
   troDX:{n:"Шарнир тяги на кулаке: вперёд",min:-40,max:40,step:0.5,u:"мм",h:"Короче плечо — больше угол на том же ходе рейки."},
   troDY:{n:"Шарнир тяги на кулаке: наружу",min:-40,max:40,step:0.5,u:"мм",
     get h(){return `0 — параллельный руль (0 % Аккермана у центра). Наружу — Аккерман растёт, внутрь — анти. По чертежу шарнир стоит на ${fx(-ACK0,1)} мм.`;}},
+  lbjDZ:{n:"Шаровая ниже кулака (удлинённая, roll center adjuster)",min:-20,max:40,step:1,u:"мм",h:"+ — шаровая опущена: рычаг встаёт под углом более высокой машины, центр крена поднимается, развал по ходу и бампстир меняются."},
   lbjDX:{n:"Шаровая в слоте кулака: вперёд",min:-40,max:40,step:0.5,u:"мм",h:"Ось поворота на месте, колесо уходит назад — растёт трейл. Тяни «кулак» на виде слева."},
   lolly:{n:"Лолипоп: опора рычага наружу",min:-25,max:25,step:0.5,u:"мм",h:"Рычаг разворачивается, шаровая идёт вперёд — растут кастер и трейл."},
   plateA:{n:"Поворот развальной плиты",min:-180,max:180,step:1,u:"°",h:"0° — смещение вперёд, 90° — наружу. Наружу — меньше отриц. развала, назад — больше кастера."},
   plateR:{n:"Эксцентриситет опоры",min:0,max:90,step:0.5,u:"мм",h:"Насколько верх стойки смещён от центра плиты."},
   slot:{n:"Наклон стакана в слоте кулака",min:-4,max:4,step:0.05,u:"°",h:"+ — больше отрицательного развала."},
   lbjDY:{n:"Шаровая в слоте кулака: наружу",min:-30,max:30,step:0.5,u:"мм",h:"Меняет развал и скраб."},
+  et:{n:"Вылет диска ET: больше (колесо внутрь)",min:-30,max:30,step:1,u:"мм",h:"− — диск с меньшим вылетом или проставка: колесо наружу по оси ступицы, скраб и длина шпинделя растут мм в мм, подъём на локе сильнее, развал тот же."},
   ride:{n:"Клиренс",min:-60,max:60,step:1,u:"мм",h:"− — занижение. Смотри развал, подруливание и центр крена."},
   roll:{n:"Крен кузова",min:-4,max:4,step:0.1,u:"°",h:"+ — правый борт вниз, как в левом повороте. Колёса ходят в противофазе; развал и схождение на графиках — к дороге, не к кузову."},
   rackDZ:{n:"Рейка вверх / вниз",min:-50,max:50,step:1,u:"мм",h:"Проставки рейки. Главное средство от подруливания при ходе подвески."},
@@ -1066,24 +1155,37 @@ const CTL={
 const TABS=[
   {id:"ackermann",t:"Аккерман",sub:"рейка и рулевые тяги",
    lead:"<b>Аккерман</b> — насколько внутреннее колесо в повороте поворачивает сильнее наружного. Двигай рейку и шарниры тяги — на графиках видно, как это меняется на всём ходе руля.",
-   ctl:["rackDX","troDY","troDX"],main:"vTop",rest:["w_c3","w_c4","vPlan","w_c1"],
-   met:["ackStatic","ack30","ackLock","lockIn","lockOut"]},
+   ctl:["rackDX","troDY","troDX","drift"],main:"vTop",rest:["w_c3","w_c4","vPlan","w_c1","w_c12"],
+   scen:[{n:"лок, параллельный руль",P:{troDY:0,troDX:0,rackDX:0,drift:0},s:"lock"},{n:"лок с анти-Аккерманом",P:{troDY:-15,drift:0},s:"lock"},{n:"дрифт 35°, контр-руль",P:{drift:35},s:-40}],
+   cav:"ось поворота, тяги и рейка считаются жёсткими: на машине сайлентблоки рейки, люфт наконечников и подрамник сдвигают мёртвую точку ближе. Углы колёс геометрические, без увода шины.",
+   met:["ackStatic","ack30","ackLock","lockIn","lockOut","sensC","sensLock"]},
   {id:"caster",t:"Кастер и трейл",sub:"шаровая, лолипоп, опора",
    lead:"<b>Кастер</b> — наклон оси поворота назад. <b>Трейл</b> — насколько пятно контакта отстаёт от точки, где ось входит в землю. Больше трейл — тяжелее руль и сильнее он возвращается.",
    ctl:["lbjDX","lolly","plateA"],main:"vSide",rest:["w_c5","w_c6"],
+   cav:"трейл считается по жёсткому колесу: пневматический трейл шины (ещё 20–40 мм на сцеплении) не учтён, поэтому реальный возврат руля сильнее, чем по мех. трейлу. Шина — барабан, пятно в центре протектора.",
    met:["caster","trail","mtrail","coff","trailOut","jack","lockRoll"]},
   {id:"camber",t:"Развал и KPI",sub:"опора, слот стакана",
    lead:"<b>Развал</b> стоя и в повороте. Из-за кастера и KPI внутреннее колесо в повороте выпрямляется и уходит в плюс; наружное сначала заваливается сильнее, а ближе к локу снова выпрямляется.",
-   ctl:["plateR","plateA","slot","lbjDY"],main:"vFront",rest:["w_c2","w_c1"],
-   met:["camber0","camberIn","camberOut","kpi","scrub","caster"]},
+   ctl:["plateR","plateA","slot","lbjDY","et"],main:"vFront",rest:["w_c2","w_c1"],
+   scen:[{n:"лок: что с развалом",P:{},s:"lock"},{n:"крен 2° и контр-руль 30°",P:{roll:2},s:-38}],
+   cav:"развал к дороге — геометрический: без прогиба шины под боковой силой и без податливости опор. Нагрузка на колёса не считается, поэтому «пятно» здесь — угол, а не площадь.",
+   met:["camber0","camberIn","camberOut","kpi","included","scrub","spindle","caster"]},
   {id:"ride",t:"Клиренс и крен",sub:"бампстир, крен, центр крена",
    lead:"Как <b>занижение</b> и <b>крен</b> меняют развал, схождение и центр крена. Рейка и шарнир тяги по высоте убирают бампстир; в крене колёса ходят в противофазе, и развал считается к дороге.",
-   ctl:["ride","roll","rackDZ","troDZ","realign"],main:"vFront",rest:["w_c7","w_c8","w_c10","w_c11","w_c9"],
-   met:["rc","bump","gain","rollCam","rollToe","camber0"]},
+   ctl:["ride","roll","lbjDZ","rackDZ","troDZ","realign"],main:"vFront",rest:["w_c7","w_c8","w_c10","w_c11","w_c9"],
+   scen:[{n:"занижение 40 мм",P:{ride:-40,roll:0},s:0},{n:"крен 3° в повороте",P:{roll:3},s:0}],
+   cav:"крен задаётся углом, а не силой: пружины, стабилизатор и перенос веса не считаются. Центр крена — кинематический, из скорости пятна; задняя подвеска в модели отсутствует.",
+   met:["rc","rcArm","bump","gain","rollCam","rollToe","camber0"],
+   tools:[{n:"Убрать бампстир шарниром тяги",key:"troDZ",h:"подбирает высоту шарнира на кулаке, при которой на 40 мм сжатия схождение не меняется"},{n:"Убрать бампстир проставками рейки",key:"rackDZ",h:"подбирает высоту рейки для того же"}]},
+  {id:"strut",t:"Стойка и клевок",sub:"motion ratio, anti-dive",
+   lead:"<b>Motion ratio</b> — сколько стойка сжимается на миллиметр хода колеса; жёсткость на колесе равна жёсткости пружины на его квадрат. <b>Anti-dive</b> — какую долю клевка при торможении держат рычаги, а не пружина; считается по мгновенному центру в боковой проекции.",
+   ctl:["ride","lolly","plateA","lbjDZ"],main:"vSide",rest:["w_c13","w_c14"],
+   cav:"anti-dive — по мгновенному центру в боковой проекции и заданным ЦТ и тормозному балансу; клевок как движение считается без пружин и амортизаторов. Motion ratio — из геометрии стойки, без трения и прогиба.",
+   met:["mr","wheelRate","antiDive","icBack","icH","caster"]},
   {id:"all",t:"Всё сразу",sub:"все виды, графики, таблица",
    lead:"Все регулировки, все виды и графики, полная таблица значений.",
-   ctl:Object.keys(CTL).concat(["realign"]),main:"vTop",rest:["vFront","vSide","vPlan","w_c3","w_c4","w_c1","w_c2","w_c5","w_c6","w_c7","w_c8","w_c10","w_c11","w_c9","vStamp"],
-   met:["ackStatic","ackLock","lockIn","lockOut","caster","mtrail","camber0","camberIn","camberOut","kpi","scrub","rc","bump","jack","lockRoll","rollCam","rollToe"]}
+   ctl:Object.keys(CTL).concat(["realign"]),main:"vTop",rest:["vFront","vSide","vPlan","w_c3","w_c4","w_c1","w_c2","w_c12","w_c5","w_c6","w_c7","w_c8","w_c10","w_c11","w_c13","w_c14","w_c9","vStamp"],
+   met:["ackStatic","ackLock","lockIn","lockOut","sensC","sensLock","caster","mtrail","camber0","camberIn","camberOut","kpi","included","scrub","spindle","rc","rcArm","bump","jack","lockRoll","rollCam","rollToe","mr","wheelRate","antiDive"]}
 ];
 const MET={
   ackStatic:{n:"Аккерман статический",u:"%",d:0},
@@ -1107,6 +1209,16 @@ const MET={
   scrub:{n:"Скраб (плечо обката)",u:"мм",d:1},
   rc:{n:"Центр крена над землёй",u:"мм",d:0},
   bump:{n:"Бампстир на 40 мм сжатия",u:"°",d:2},
+  included:{n:"Included angle (KPI + развал)",u:"°",d:2},
+  rcArm:{n:"Плечо крена: ЦТ над центром крена",u:"мм",d:0},
+  mr:{n:"Motion ratio стойки",u:"",d:3},
+  wheelRate:{n:"Жёсткость на колесе",u:"Н/мм",d:1},
+  antiDive:{n:"Anti-dive",u:"%",d:0},
+  icBack:{n:"Мгновенный центр позади пятна",u:"м",d:2},
+  icH:{n:"Мгновенный центр над землёй",u:"мм",d:0},
+  spindle:{n:"Длина шпинделя",u:"мм",d:0},
+  sensC:{n:"Чувствительность у центра",u:"°/10 мм",d:2},
+  sensLock:{n:"Чувствительность у лока",u:"°/10 мм",d:2},
   gain:{n:"Развал на 40 мм сжатия",u:"°",d:2}
 };
 let TAB="ackermann";
@@ -1124,9 +1236,9 @@ const PRESETS=[
   {id:"custom",n:"свой (регулировки ниже)",note:""},
   {id:"drawing",n:"как на чертеже",P:{},
    note:"Все регулировки в ноль, точки с чертежа. Параллельный руль, развал стоя −4.69°, кастер 4.77°, KPI 15.6°, мех. трейл 37 мм."},
-  {id:"stable",n:"стабильное пятно 12–45°",P:{plateR:75,plateA:63,lbjDX:40,lbjDY:0,slot:3.2,toe:0,troDY:0,troDX:0,rackDX:0,rackDZ:0,troDZ:0,ride:0,roll:2},cas:4.5,
+  {id:"stable",n:"стабильное пятно 12–45°",P:{plateR:75,plateA:63,lbjDX:40,lbjDY:0,et:0,slot:3.2,toe:0,troDY:0,troDX:0,rackDX:0,rackDZ:0,troDZ:0,ride:0,roll:2},cas:4.5,
    note:"Найден перебором ~1200 комбинаций: при контр-руле и крене кузова 2° развал нагруженного колеса к дороге держится в <b>±3°</b> на 12–45° (на чертеже ±4.7°), ноль в 30°. Опора наружу (эксцентриситет <b>75</b>) снимает KPI до <b>14.5°</b>; кастер <b>4.5°</b> выставлен лолипопом (≈ +2 мм), больше не добавлять; возврат руля даёт мех. трейл <b>65 мм</b> (шаровая назад на 40) и подъём <b>17 мм</b> на локе; слот <b>+3.2°</b> ставит развал стоя <b>−5.6°</b>. Та же шаровая назад даёт анти-Аккерман в большом угле: ведомое на локе <b>76°</b> против <b>55°</b>. Крен 2° включён в сетап: под свой крен подбирай слот (на 1° крена ≈ 0.5° слота)."},
-  {id:"stable3",n:"стабильное пятно, кастер 3° (руль руками)",P:{plateR:75,plateA:63,lbjDX:0,lbjDY:0,slot:2.15,toe:0,troDY:0,troDX:0,rackDX:0,rackDZ:0,troDZ:0,ride:0,roll:2},cas:3,
+  {id:"stable3",n:"стабильное пятно, кастер 3° (руль руками)",P:{plateR:75,plateA:63,lbjDX:0,lbjDY:0,et:0,slot:2.15,toe:0,troDY:0,troDX:0,rackDX:0,rackDZ:0,troDZ:0,ride:0,roll:2},cas:3,
    note:"Та же опора (эксцентриситет <b>75</b>, KPI <b>14.7°</b>), но кастер <b>3°</b> лолипопом (≈ −10 мм) и шаровая на месте: трейл не добавлен, мех. трейл <b>28 мм</b>, подъём на локе <b>14 мм</b>. Руль возвращается слабее, его придётся вести руками. Полоса развала нагруженного колеса при крене 2° — <b>±2.8°</b> на 12–45°, ноль в 30°, слот <b>+2.15°</b>, развал стоя <b>−5.2°</b>. Аккерман почти параллельный: ведомое на 45° стоит на 49°, лок 51/52°."}
 ];
 function markCustom(){if(PRESET==="custom")return;PRESET="custom";const sel=$("#preset");if(sel){sel.value="custom";$("#presetNote").innerHTML="";}}
@@ -1139,8 +1251,8 @@ function applyPreset(id){
 }
 function renderPanel(){
   const t=TABS.find(x=>x.id===TAB);
-  $("#panel").innerHTML=`<div class="preset"><label>Сетап <select id="preset" aria-label="Готовый сетап">${PRESETS.map(p=>`<option value="${p.id}">${p.n}</option>`).join("")}</select></label><p class="note" id="presetNote"></p></div>
-   <p class="lead">${t.lead}</p>${t.ctl.map(ctlHTML).join("")}
+  $("#panel").innerHTML=`<div class="preset"><label>Сетап <select id="preset" aria-label="Готовый сетап">${PRESETS.map(p=>`<option value="${p.id}">${p.n}</option>`).join("")}</select></label><p class="note" id="presetNote"></p>${t.scen?`<div class="scen">${t.scen.map((o,i)=>`<button type="button" class="mini sc" data-i="${i}">▸ ${o.n}</button>`).join("")}</div>`:""}</div>
+   <p class="lead">${t.lead}</p>${t.ctl.map(ctlHTML).join("")}${t.tools?`<div class="tools"><h2>Подобрать</h2>${t.tools.map((o,i)=>`<button type="button" class="tool" data-i="${i}" title="${o.h}">${o.n}</button>`).join("")}<p class="note" id="toolMsg" role="status"></p></div>`:""}
    <div class="delta"><h2>Что изменилось</h2><p class="sub">было → стало, относительно базы</p><table id="dtab" aria-label="Изменения относительно базы"></table>
    <div class="btns"><button type="button" id="pin" title="Текущая геометрия станет базой: от неё считаются изменения, она же — пунктир «база» на графиках">Запомнить как базу</button><button type="button" id="reset" title="Все регулировки и точки — как на чертеже">Вернуть всё как на чертеже</button></div></div>`;
   for(const id of t.ctl){
@@ -1153,6 +1265,12 @@ function renderPanel(){
     box.querySelector(".undo").addEventListener("click",()=>set(BASEP[id]));
   }
   $("#pin").addEventListener("click",()=>{BASE=RES;BASEP={...P};GEN++;syncCtl();drawAll();});
+  document.querySelectorAll(".sc").forEach(b=>b.addEventListener("click",()=>{const o=t.scen[+b.dataset.i];stopPlay();Object.assign(P,o.P);markCustom();syncCtl();recompute();
+    setS(o.s==="lock"?-(RES.sHi):o.s);}));
+  document.querySelectorAll(".tool").forEach(b=>b.addEventListener("click",()=>{const o=t.tools[+b.dataset.i];stopPlay();
+    const v=seek(o.key,w=>w&&w.M.bump,0,0.01,P[o.key],8);
+    if(v==null){$("#toolMsg").textContent="в пределах хода регулировки ноль не найден";return;}
+    P[o.key]=Math.round(v*2)/2;markCustom();syncCtl();recompute();$("#toolMsg").innerHTML=`${CTL[o.key].n}: <b>${fx(P[o.key],1)} мм</b> — бампстир на 40 мм ≈ 0.`;}));
   {const sel=$("#preset");sel.value=PRESET;$("#presetNote").innerHTML=PRESETS.find(p=>p.id===PRESET).note;
    sel.addEventListener("change",()=>{PRESET=sel.value;$("#presetNote").innerHTML=PRESETS.find(p=>p.id===PRESET).note;applyPreset(PRESET);});}
   $("#reset").addEventListener("click",()=>{stopPlay();resetHP();CAR={...CAR0};const s=P.s;resetP();calibrateAck0();P.s=s;PDEF={...P};fillSettings();syncCtl();recompute();BASE=RES;BASEP={...P};drawAll();});
@@ -1179,18 +1297,19 @@ function setTab(id){
   const t=TABS.find(x=>x.id===id),pool=$("#pool"),main=$("#main"),rest=$("#rest");
   [...main.children,...rest.children].forEach(el=>pool.appendChild(el));
   main.appendChild($("#"+t.main));
+  {let cv=$("#cav");if(!cv){cv=document.createElement("p");cv.id="cav";cv.className="cav";}if(t.cav){cv.innerHTML="<b>Чего модель не учитывает.</b> "+t.cav;main.appendChild(cv);}else pool.appendChild(cv);}
   for(const r of t.rest)rest.appendChild($("#"+r));
   document.querySelectorAll(".drag-hint").forEach(e=>e.hidden=!main.contains(e));
   renderPanel();drawAll();
 }
 
 // ───────── settings (expert)
-const SET=[["stroke","Ход рейки от центра ±, мм",1],["wheelbase","Колёсная база, мм",1],["rollShare","Доля передка в жёсткости на крен, % (крен и ход колёс на локе)",5],["toe","Схождение на колесо, ° (+ в схождение)",0.02]];
+const SET=[["stroke","Ход рейки от центра ±, мм",1],["wheelbase","Колёсная база, мм",1],["cgH","Высота центра тяжести, мм (плечо крена, anti-dive)",10],["brakeF","Доля тормозов на переде, %",1],["spring","Жёсткость пружины стойки, Н/мм",5],["rollShare","Доля передка в жёсткости на крен, % (крен и ход колёс на локе)",5],["toe","Схождение на колесо, ° (+ в схождение)",0.02]];
 function fillSettings(){
   $("#setCar").innerHTML=SET.map(([k,n,st])=>`<div class="setrow"><label for="s_${k}">${n}</label><input class="num" type="number" id="s_${k}" step="${st}" value="${P[k]}"></div>`).join("")+
-    [["camber","Развал на чертеже, °",0.01],["tireW","Ширина шины, мм",5],["groundZ","Земля, Z мм",0.1]].map(([k,n,st])=>`<div class="setrow"><label for="s_${k}">${n}</label><input class="num" type="number" id="s_${k}" step="${st}" value="${CAR[k]}"></div>`).join("");
+    [["camber","Развал на чертеже, °",0.01],["tireW","Ширина шины, мм",5],["tireD","Диаметр шины, мм (трейл и скраб растут с ним)",1]].map(([k,n,st])=>`<div class="setrow"><label for="s_${k}">${n}</label><input class="num" type="number" id="s_${k}" step="${st}" value="${CAR[k]}"></div>`).join("");
   for(const [k] of SET)$("#s_"+k).addEventListener("change",e=>{const v=+e.target.value;if(!isFinite(v))return;P[k]=v;PDEF[k]=v;if(k==="stroke")P.s=Math.max(-v,Math.min(v,P.s));syncCtl();recompute();});
-  for(const k of ["camber","tireW","groundZ"])$("#s_"+k).addEventListener("change",e=>{const v=+e.target.value;if(isFinite(v)){CAR[k]=v;recompute();}});
+  for(const k of ["camber","tireW","tireD"])$("#s_"+k).addEventListener("change",e=>{const v=+e.target.value;if(isFinite(v)){CAR[k]=v;if(k==="tireD"||k==="camber")CAR.groundZ=HP.WC[2]-CAR.tireD/2*Math.cos(CAR.camber*DEG);recompute();}});
   $("#hpt").innerHTML=`<tr><td></td><td class="num">X</td><td class="num">Y</td><td class="num">Z</td></tr>`+
     Object.entries(HP0).map(([k,v])=>`<tr class="${v.est?"est":""}"><td>${v.n}</td>${[0,1,2].map(i=>`<td><input type="number" step="0.1" id="hp_${k}_${i}" value="${HP[k][i]}" aria-label="${v.n} ${"XYZ"[i]}"></td>`).join("")}</tr>`).join("");
   for(const k in HP0)for(const i of [0,1,2])$(`#hp_${k}_${i}`).addEventListener("change",e=>{const v=+e.target.value;if(!isFinite(v))return;
@@ -1199,7 +1318,7 @@ function fillSettings(){
 
 // ───────── state and drawing orchestration
 let RES=null,BASE=null,BASEP=null,CUR=null,HOVER=null,pending=false;
-let GEN=0; // bumps whenever the curves can change, so charts keep their static layer across steering frames
+let GEN=0;const ALT={}; // alternative curves per chart, keyed by GEN // bumps whenever the curves can change, so charts keep their static layer across steering frames
 function recompute(){GEN++;RES=compute();const s=Math.max(RES.sLo,Math.min(RES.sHi,P.s));if(s!==P.s){P.s=s;}syncCtl();CUR=computeCurrent(RES);schedule();}
 function updateCurrent(){CUR=computeCurrent(RES);schedule();}
 function schedule(){if(pending)return;pending=true;requestAnimationFrame(()=>{pending=false;drawAll();});}
@@ -1232,10 +1351,10 @@ function drawAll(){
   const xi=RES.stat.xInt,dx=xi==null?0:HP.WC[0]-xi;
   $("#nTop").innerHTML=`Статический Аккерман <b>${fx(M.ackStatic,0)} %</b>${M.ackStatic<-0.5?" — <b>анти</b>: наружное колесо поворачивает больше внутреннего":""}. `+
     `Оранжевые линии ${xi==null?"параллельны":dx>0?`сходятся в ${(dx/1000).toFixed(2)} м за передней осью`:`сходятся впереди, в ${(-dx/1000).toFixed(2)} м перед осью`}; 100 % — точно на задней оси (база ${(P.wheelbase/1000).toFixed(3)} м). Считается по реальным углам колёс у центра — с рейкой и наклоном тяг.`;
-  $("#nFront").innerHTML=`Развал стоя <b>${fx(M.camber0,2)}°</b>, KPI <b>${fx(M.kpi,1)}°</b>, скраб <b>${fx(M.scrub,0)} мм</b>, центр крена <b>${fx(Math.abs(M.rc),0)} мм</b> ${M.rc<-0.5?"ниже земли":"над землёй"}.`;
+  $("#nFront").innerHTML=`Развал стоя <b>${fx(M.camber0,2)}°</b>, KPI <b>${fx(M.kpi,1)}°</b> (included ${fx(M.included,1)}°), скраб <b>${fx(M.scrub,0)} мм</b>, шпиндель ${fx(M.spindle,0)} мм, центр крена <b>${fx(Math.abs(M.rc),0)} мм</b> ${M.rc<-0.5?"ниже земли":"над землёй"}.`;
   $("#nSide").innerHTML=`Руль прямо: кастер <b>${fx(M.caster,2)}°</b>, трейл <b>${fx(M.trail)} мм</b>, мех. трейл <b>${fx(M.mtrail)} мм</b>, кастер-офсет <b>${fx(M.coff)} мм</b>.`+
     (Math.abs(CUR.L.del)>0.5?` Сейчас колесо повёрнуто на ${fx(Math.abs(CUR.L.del))}° — на виде кастер <b>${fx(CUR.L.caster,1)}°</b> и трейл <b>${fx(CUR.L.trail)} мм</b> в плоскости колеса.`:"");
-  $("#nPlan").innerHTML=`Пунктир — перпендикуляры от пятен. При 100 % Аккермане обе линии сходятся в одной точке на задней оси.`;
+  $("#nPlan").innerHTML=P.drift>0?`Дрифт: машина идёт боком на ${P.drift}°, руль в противоход. Жёлтая точка — центр, вокруг которого всё катится, если ведущее колесо идёт без увода; штрих у ведомого — куда ему надо смотреть, чтобы тоже катиться чисто.`:`Пунктир — перпендикуляры от пятен. При 100 % Аккермане обе линии сходятся в одной точке на задней оси. Задай угол скольжения, чтобы увидеть то же в дрифте.`;
   const showGhost=BASE&&BASE!==RES;
   document.querySelectorAll(".ghostlg").forEach(e=>e.hidden=!showGhost);
   for(const c of CH){
@@ -1244,6 +1363,10 @@ function drawAll(){
     const dots=c.cur==="s"?c.dots(CUR):(c.cur==="di"&&CUR.ack&&CUR.s>0?c.dots(CUR):[]);
     series.forEach((s,i)=>{s.dot=dots[i];});
     if(showGhost)series=c.ser(BASE,{ghost:true}).slice(0,1).map(s=>({...s,c:C.mark,a:0.55,w:2.6,d:[1.5,4]})).concat(series); // dotted amber: unlike any reference line
+    if(c.alt){ // the same curve with one adjuster moved both ways: thin, so the eye sees which way things go
+      let A=ALT[c.id];if(!A||A.gen!==GEN){A={gen:GEN,ser:[]};for(const v of c.alt.vals){const w=whatIf({[c.alt.key]:v});if(w)A.ser.push(c.ser(w.res,{ghost:true}).slice(0,1)[0]);}ALT[c.id]=A;}
+      series=A.ser.map(s=>({...s,c:C["ink-3"],a:0.9,w:1,d:[3,3]})).concat(series);
+      const lg=$("#w_"+c.id+" .altlg");if(lg)lg.textContent="тонкие — "+c.alt.n;}
     const cur=c.cur==="s"?-P.s:c.cur==="di"?(CUR.ack&&CUR.s>0?CUR.ack.di:null):c.cur==="roll"?P.roll:0;
     chart($("#"+c.id),{series,xl:c.xl,yl:c.yl,cursor:cur,x:c.cur==="s"?[-P.stroke,P.stroke]:c.cur==="roll"?[-4,4]:null,y0:c.y0,minSpan:c.minSpan,key:GEN});
     $("#n_"+c.id).innerHTML=c.note(M,BASE.M);
@@ -1345,7 +1468,7 @@ function alignTo(cam,cas){
 // ───────── info cards: why the body lifts and rolls, what scrub does, what to turn and by how much
 function whatIf(patch,pre){ // compute the whole model with a few parameters changed, restore everything after
   const save={...P};Object.assign(P,patch);let r=null;
-  try{if(pre)pre();const res=compute();if(res.ok){r={M:res.M,cur:computeCurrent(res)};}}finally{P=save;}
+  try{if(pre)pre();const res=compute();if(res.ok){r={M:res.M,cur:computeCurrent(res),res};}}finally{P=save;}
   return r;}
 function seek(key,get,target,tol,x0,dx){ // secant on a what-if figure; the adjuster value that hits the target, or null
   const c=CTL[key],cl=x=>Math.max(c.min,Math.min(c.max,x));
