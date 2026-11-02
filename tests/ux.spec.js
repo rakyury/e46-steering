@@ -203,6 +203,21 @@ test.describe("school additions", () => {
   });
 });
 
+test.describe("rear anti-squat", () => {
+  test("the rear tab shows the three cars, the knobs follow the suspension type and the number matches the chart", async ({ page }) => {
+    await open(page, "rear");
+    await expect(page.locator("#vRear")).toBeVisible(); await expect(page.locator("#w_c15")).toBeVisible();
+    await expect(page.locator("#nRear")).toContainText("anti-squat");
+    expect(await page.evaluate(() => RES.M.antiSquat)).toBeGreaterThan(35);
+    await expect(page.locator("#c_rPivot")).toBeVisible();
+    await page.selectOption("#c_rCar", "e92");
+    await expect(page.locator("#c_rLower")).toBeVisible(); await expect(page.locator("#c_rPivot")).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => RES.M.antiSquat)).toBeGreaterThan(30);
+    await page.fill("#c_rLower", "14"); await page.press("#c_rLower", "Tab");
+    await expect.poll(() => page.evaluate(() => RES.M.antiSquat)).toBeGreaterThan(50);
+  });
+});
+
 test.describe("steering", () => {
   test("slider turns the wheels, centre button straightens them", async ({ page }) => {
     await open(page);

@@ -151,6 +151,9 @@ input[type=range]::-moz-range-thumb{width:18px;height:20px;background:var(--red)
 .tools h2{margin:0;font-size:var(--t-xs);font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2)}
 .tools .tool{text-align:left;font-style:italic}
 .tools .note{margin:0;font-size:var(--t-sm);color:var(--ink-2)}
+.ctl .rsel{width:100%;font:inherit;font-size:var(--t-md);font-style:italic;color:var(--ink);background:transparent;border:0;border-bottom:1px solid var(--ink-2);padding:4px 0;border-radius:0;min-height:32px}
+.ctl .rsel option{background:var(--paper);color:var(--ink)}
+#vRear canvas{aspect-ratio:2.4/1}
 .preset label{display:flex;align-items:center;gap:var(--s2);font-size:var(--t-xs);font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2)}
 .preset select{flex:1;min-width:0;font:inherit;font-size:var(--t-md);font-style:italic;letter-spacing:0;text-transform:none;font-weight:500;color:var(--ink);background:transparent;border:0;border-bottom:1px solid var(--ink-2);padding:3px 0;cursor:pointer;border-radius:0;min-height:32px}
 .preset select option{background:var(--paper);color:var(--ink)}
@@ -275,6 +278,7 @@ details.settings summary small{font-size:var(--t-sm);color:var(--ink-2)}
   #vTop canvas{aspect-ratio:2/1} /* the drawing is 2.7:1; 1.6 left a blank band under it on phones */
   #vFront canvas{aspect-ratio:1.7/1}
   .main #vSide canvas{aspect-ratio:1/1}
+  #vRear canvas{aspect-ratio:1.7/1}
   .ch canvas{aspect-ratio:1.7/1}
   .fig{padding:var(--s2) var(--s3) var(--s3)}
   .fig h3{font-size:var(--t-lg)}
@@ -354,6 +358,9 @@ details.settings summary small{font-size:var(--t-sm);color:var(--ink-2)}
   <figure class="fig" id="vSide" style="margin:0"><div class="fig-h"><h3>Вид слева, левое колесо</h3><span class="drag-hint">◎ — тяни кулак вперёд-назад</span></div><p class="note" id="nSide"></p>
     <div class="lg"><span><i style="border-top-color:var(--red);border-top-style:dashed"></i>ось поворота</span><span><i style="border-top-color:var(--mark)"></i>перпендикуляры к оси: мех. трейл, кастер-офсет</span><span><i style="border-top-color:var(--ink-3);border-top-style:dashed"></i>вертикаль</span></div>
     <canvas aria-label="Вид слева"></canvas></figure>
+  <figure class="fig" id="vRear" style="margin:0"><div class="fig-h"><h3>Задок сбоку · anti-squat</h3></div><p class="note" id="nRear"></p>
+    <div class="lg"><span><i style="border-top-color:var(--mark)"></i>линия силы: центр колеса → МЦ</span><span><i style="border-top-color:var(--ink-2);border-top-style:dashed"></i>100 %: ЦТ над базой</span><span><i style="border-top-color:var(--ink)"></i>рычаги</span></div>
+    <canvas aria-label="Задняя подвеска сбоку"></canvas></figure>
   <figure class="fig" id="vPlan" style="margin:0"><div class="fig-h"><h3>Схема поворота</h3></div><p class="note" id="nPlan"></p>
     <div class="lg"><span><i style="border-top-color:var(--red)"></i>левое</span><span><i style="border-top-color:var(--blue)"></i>правое</span><span><i style="border-top-color:var(--mark);border-top-style:dashed"></i>от наружного к центру внутреннего</span></div>
     <canvas aria-label="Схема поворота"></canvas></figure>
@@ -396,7 +403,7 @@ let CAR={...CAR0};
 
 // ───────── adjustable parameters
 let ACK0=0; // tie-rod joint offset (mm, outboard) at which the steering is parallel near centre; found by calibrateAck0()
-const DEF={s:0,stroke:60,rackDX:0,rackDZ:0,troDX:0,troDY:0,troDZ:0,lbjDX:0,lbjDY:0,lolly:0,plateR:0,plateA:0,slot:0,ride:0,roll:0,rollShare:55,et:0,lbjDZ:0,drift:0,cgH:500,brakeF:66,spring:80,toe:0,wheelbase:2725,realign:false};
+const DEF={s:0,stroke:60,rackDX:0,rackDZ:0,troDX:0,troDY:0,troDZ:0,lbjDX:0,lbjDY:0,lolly:0,plateR:0,plateA:0,slot:0,ride:0,roll:0,rollShare:55,et:0,lbjDZ:0,drift:0,rCar:"e46",rTravel:0,rPivot:0,rUpper:-2,rLower:8,cgH:500,brakeF:66,spring:80,toe:0,wheelbase:2725,realign:false};
 let P={};
 function plateFrame(){
   const u0=nrm(sub(HP.TOP,HP.DLOW));
@@ -530,6 +537,37 @@ function antiDive(p,g,gz){
   const tan=h/back;const pct=tan*(P.wheelbase/P.cgH)*(P.brakeF/100)*100;
   return {ic,back,h,pct,tan};
 }
+// ───────── rear axle in the side view (anti-squat), independent of the front model
+// E36/E46: a trailing arm (Z-axle) — one pivot ahead of the wheel, so the instant centre is that bushing.
+// E92: five links act as an upper and a lower virtual arm; their side-view lines meet at the instant centre.
+// Dimensions ≈: set to reproduce FDF's published readouts (E36: pivot 450 ahead, 35 above the hub, 42 %; E92: axes −2°/+8°,
+// IC 1.6 m ahead, 38 %); E46 taken as the E36 axle with its own wheelbase. Replace with measured points when available.
+const REAR={
+  e36:{n:"E36 · косой рычаг (Z-axle)",wb:2700,type:"trail",pivX:450,pivUp:35},
+  e46:{n:"E46 · косой рычаг (Z-axle)",wb:2725,type:"trail",pivX:450,pivUp:35},
+  e92:{n:"E92 · пятирычажка (два виртуальных рычага)",wb:2760,type:"five",L:400,offU:173,offL:112}
+};
+function rearCalc(t){ // t: rear wheel travel, + = compression (squat); heights above the ground, x ahead of the rear axle
+  const car=REAR[P.rCar]||REAR.e46,hw=CAR.tireD/2;let ic,links;
+  if(car.type==="trail"){
+    const up=car.pivUp+P.rPivot,Larm=Math.hypot(car.pivX,up);const zp=hw+up-t;const dz=hw-zp;if(Math.abs(dz)>=Larm)return null;
+    const dx=Math.sqrt(Larm*Larm-dz*dz);ic=[dx,zp];links=[[[0,hw],[dx,zp]]];
+  }else{
+    // four-bar: carrier points off above/below the hub, links of length L to body pivots set by the stock axis angles
+    const au=P.rUpper*DEG,al=P.rLower*DEG,L=car.L,oU=car.offU,oL=car.offL;
+    const Pu=[L*Math.cos(au),hw+oU+L*Math.sin(au)-t],Pl=[L*Math.cos(al),hw-oL+L*Math.sin(al)-t]; // body pivots, dropped by t
+    let xc=0,ph=0;
+    for(let it=0;it<30;it++){const Cu=[xc-oU*Math.sin(ph),hw+oU*Math.cos(ph)],Cl=[xc+oL*Math.sin(ph),hw-oL*Math.cos(ph)];
+      const f1=Math.hypot(Cu[0]-Pu[0],Cu[1]-Pu[1])-L,f2=Math.hypot(Cl[0]-Pl[0],Cl[1]-Pl[1])-L;if(Math.abs(f1)+Math.abs(f2)<1e-6)break;
+      const h=1e-4;const g=(x,p)=>{const cu=[x-oU*Math.sin(p),hw+oU*Math.cos(p)],cl=[x+oL*Math.sin(p),hw-oL*Math.cos(p)];return [Math.hypot(cu[0]-Pu[0],cu[1]-Pu[1])-L,Math.hypot(cl[0]-Pl[0],cl[1]-Pl[1])-L];};
+      const gx=g(xc+h,ph),gp=g(xc,ph+h);const J=[[(gx[0]-f1)/h,(gp[0]-f1)/h],[(gx[1]-f2)/h,(gp[1]-f2)/h]];const det=J[0][0]*J[1][1]-J[0][1]*J[1][0];if(Math.abs(det)<1e-12)return null;
+      xc-=( J[1][1]*f1-J[0][1]*f2)/det;ph-=(-J[1][0]*f1+J[0][0]*f2)/det;}
+    const Cu=[xc-oU*Math.sin(ph),hw+oU*Math.cos(ph)],Cl=[xc+oL*Math.sin(ph),hw-oL*Math.cos(ph)];
+    ic=lineX(Cu,Pu,Cl,Pl);if(!ic)return null;links=[[Cu,Pu],[Cl,Pl]];
+  }
+  const tan=(ic[1]-hw)/ic[0];const k100=P.cgH/car.wb;
+  return {ic,tan,pct:tan/k100*100,k100,links,hw,car};
+}
 function icOf(p,g){
   const x0=HP.WC[0];
   const n1=cross(sub(g.AR,g.AF),sub(p.LBJ,g.AF)), n2=p.u;
@@ -651,6 +689,7 @@ function compute(quick){ // quick: only the first few mm of a left turn, for cal
   const phs=[];for(let i=0;i<=16;i++)phs.push(i*0.25);
   runR(phs);runR(phs.slice(1).map(v=>-v));
   rt.sort((a,b)=>a.ph-b.ph);out.rt=rt;
+  out.rear=[];for(let t=-50;t<=50;t+=5){const q=rearCalc(t);if(q)out.rear.push({t,pct:q.pct,icx:q.ic[0],ich:q.ic[1]});}
   out.M=metrics(out);
   // the arm-line rule ignores rack position and tie-rod angle, so the static figure is taken from the real
   // wheel angles near centre; the plan-view lines are drawn to the matching equivalent intersection
@@ -674,7 +713,7 @@ function metrics(res){
   const lk=sw[li];
   const at=deg=>{for(let i=N+2;i<=li;i++){const a=sw[i-1].ack,b=sw[i].ack;if(a&&b&&a.di<=deg&&b.di>=deg){const t=(deg-a.di)/(b.di-a.di);return a.ackD+(b.ackD-a.ackD)*t;}}return NaN;};
   const bt=t=>res.bt.find(q=>q.t===t);const b0=bt(0),b40=bt(40);const m0=res.m0.L;
-  const rt=ph=>res.rt.find(q=>Math.abs(q.ph-ph)<1e-9);const r0=rt(0),r2=rt(2);
+  const rt=ph=>res.rt.find(q=>Math.abs(q.ph-ph)<1e-9);const r0=rt(0),r2=rt(2);const r0r=(res.rear||[]).find(q=>q.t===0);
   return {
     ackStatic:at(4), ack30:at(30), ackLock:lk.ack?lk.ack.ackD:NaN,
     lockIn:lk.L.del, lockOut:lk.R.del, stuck:li<sw.length-1,
@@ -688,6 +727,7 @@ function metrics(res){
     included:m0.kpi+m0.camber, spindle:m0.spindle,
     rcArm:b0&&b0.rc?P.cgH-b0.rc.h:NaN, mr:b0?b0.mr:NaN, wheelRate:b0?P.spring*b0.mr*b0.mr:NaN,
     antiDive:b0&&b0.ad?b0.ad.pct:NaN, icBack:b0&&b0.ad?b0.ad.back/1000:NaN, icH:b0&&b0.ad?b0.ad.h:NaN,
+    antiSquat:r0r?r0r.pct:NaN, rIcX:r0r?r0r.icx/1000:NaN, rIcH:r0r?r0r.ich:NaN,
     sensC:c.sensL||NaN, sensLock:Math.max(lk.sensL||(sw[li-1]&&sw[li-1].sensL)||0,lk.sensR||(sw[li-1]&&sw[li-1].sensR)||0)||NaN
   };
 }
@@ -961,6 +1001,33 @@ function driftGeom(cur){
   const R=Math.hypot(pl[0]-C[0],pl[1]-C[1])/1000;
   return {C,m,lead,trail,v,ideal,slip,R,leadDel:lead.del,trailDel:trail.del};
 }
+function drawRear(res,big){
+  const q=rearCalc(P.rTravel);const cv=$("#vRear canvas");const car=REAR[P.rCar]||REAR.e46,wb=car.wb;
+  const F=frame(cv,[-(wb+650),620,-60,900],p=>[-p[0],p[2]]); // points are [x ahead, 0, z] // x ahead of the rear axle, drawn with the front to the left
+  ground(F,0,-(wb+650),620);
+  if(!q){text(F,[F.W/2,F.H/2],"рычаг не собирается на таком ходе",C["ink-2"],{align:"center"});return;}
+  const hw=q.hw,t=P.rTravel;
+  // car: wheels, a low body that drops at the rear with the travel, the CG
+  const circ=(x,z,r,col,w,dash)=>{const c=F.ctx,S=F.S([-x,z]);c.beginPath();c.arc(S[0],S[1],r*F.sc,0,2*Math.PI);c.strokeStyle=col;c.lineWidth=w;c.setLineDash(dash||[]);c.stroke();c.setLineDash([]);};
+  circ(0,hw,hw,C.red,1.6);circ(0,hw,hw*0.68,C.red,0.8,[4,4]);circ(wb,hw,hw,C["ink-3"],1,[6,4]);
+  const sill=190-t,roof=sill+600;const body=[[-420,sill],[-470,sill+340],[-380,roof-120],[400,roof-120],[900,roof+40],[wb-700,roof+40],[wb-300,roof-130],[wb+400,sill+300],[wb+450,sill+t],[wb+420,sill+t]];
+  polyline(F,body.map(([x,z])=>[x,0,z]),C["ink-3"],1,[7,5]);
+  // arches
+  for(const [x,dz] of [[0,-t],[wb,0]]){const arc=[];for(let i=0;i<=16;i++){const a=Math.PI*0.06+Math.PI*0.88*i/16;arc.push([x+Math.cos(a)*(hw+70),0,hw+dz+Math.sin(a)*(hw+70)]);}polyline(F,arc,C["ink-3"],1,[7,5]);}
+  const cg=[wb/2,P.cgH-t/2];mark(F,[cg[0],0,cg[1]],C.ink,5);text(F,F.S([-cg[0],cg[1]+22]),"ЦТ",C["ink-2"],{align:"center",size:12});
+  // links and the instant centre
+  for(const [a,b] of q.links){seg(F,[a[0],0,a[1]],[b[0],0,b[1]],C.ink,3);mark(F,[b[0],0,b[1]],C.ink,3.5);}
+  const ic=q.ic;mark(F,[ic[0],0,ic[1]],C.mark,5);
+  text(F,F.S([-ic[0],ic[1]+24]),`МЦ ${fx(ic[0]/1000,2)} м · ${fx(ic[1],0)} мм`,C["mark-ink"],{align:"center",size:12,w:600,clamp:true});
+  // force line from the wheel centre through the IC, and the 100 % line, both out to the front axle
+  const zF=hw+q.tan*wb,z100=hw+q.k100*wb;
+  seg(F,[0,0,hw],[wb,0,zF],C.mark,2.2);seg(F,[0,0,hw],[wb,0,z100],C["ink-2"],1.2,[6,4]);
+  seg(F,[wb,0,-20],[wb,0,880],C["ink-3"],0.8,CL);
+  text(F,F.S([-wb-30,zF]),`${fx(q.pct,0)} %`,C["mark-ink"],{align:"right",size:14,w:600});
+  text(F,F.S([-wb-30,z100]),"100 %",C["ink-2"],{align:"right",size:12});
+  text(F,[10,F.S([0,880])[1]+14],"← вперёд",C["ink-2"],{size:12});
+  text(F,[F.W-8,F.S([0,880])[1]+14],`${car.n} ≈ · ход ${t>0?"+":""}${t} мм`,C["ink-2"],{size:12,align:"right"});
+}
 function drawPlan(res,cur){
   const L=P.wheelbase,x0=HP.WC[0],xr=x0-L;const a=cur.ack;const dg=driftGeom(cur);
   // frame the car plus the turn centres on the rear axle (capped so a near-straight wheel doesn't shrink the car to a dot)
@@ -1109,6 +1176,10 @@ const CH=[
    lg:[["anti-dive","mark"]],
    ser:r=>[{pts:r.bt.filter(q=>q.ad).map(q=>[q.t,q.ad.pct]),c:C.mark,w:2.4}],dots:()=>[],
    note:M=>`Стоя <b>${fx(M.antiDive,0)} %</b>: мгновенный центр в боковой проекции ${fx(M.icBack,2)} м позади пятна и ${fx(M.icH,0)} мм над землёй; линия от пятна через него против линии «100 %» (ЦТ ${P.cgH} мм на базу ${P.wheelbase} мм) при ${P.brakeF} % тормозов на переде. Ось рычага и наклон стойки задают его: лолипоп и поворот плиты двигают.`},
+  {id:"c15",t:"Anti-squat по ходу задка",xl:"ход заднего колеса, мм (+ присед)",yl:"%",cur:"rt",y0:0,minSpan:20,
+   lg:[["anti-squat","mark"]],
+   ser:r=>[{pts:(r.rear||[]).map(q=>[q.t,q.pct]),c:C.mark,w:2.4}],dots:()=>[],
+   note:M=>`Стоя <b>${fx(M.antiSquat,0)} %</b>: МЦ ${fx(M.rIcX,2)} м впереди оси и ${fx(M.rIcH,0)} мм над землёй. Косой рычаг: при приседе подушка уходит вниз к ступице, линия силы ложится, процент падает — задок «проваливается» под газом сильнее, чем стоя.`},
   {id:"c9",t:"Высота центра крена",xl:"ход колёс, мм (+ сжатие)",yl:"от земли, мм",cur:"t",minSpan:20,
    lg:[["центр крена","mark"]],
    ser:r=>[{pts:r.bt.map(q=>q.rc?[q.t,q.rc.h]:null),c:C.mark,w:2.6}],dots:()=>[],
@@ -1134,6 +1205,10 @@ function buildCharts(){
 
 // ───────── adjustments
 const CTL={
+  rTravel:{n:"Ход задка: сжатие (присед)",min:-50,max:50,step:1,u:"мм",h:"+ — задок приседает под газом, кузов опускается к колесу; смотри, как уходит мгновенный центр и процент."},
+  rPivot:{n:"Подушка косого рычага выше",min:-30,max:30,step:1,u:"мм",h:"Смещённые сайлентблоки или поднятое гнездо рычага. Выше подушка — круче линия силы, больше anti-squat."},
+  rUpper:{n:"Ось верхнего виртуального рычага",min:-12,max:12,step:0.5,u:"°",h:"Угол в боковой проекции, + поднимается к переду. Задаётся точками крепления верхних тяг."},
+  rLower:{n:"Ось нижнего виртуального рычага",min:-4,max:20,step:0.5,u:"°",h:"+ поднимается к переду: нижние тяги смотрят вверх к кузову — мгновенный центр ближе и выше, anti-squat растёт."},
   drift:{n:"Угол скольжения кузова (дрифт)",min:0,max:45,step:1,u:"°",h:"0 — обычный поворот. В дрифте машина идёт боком под этим углом, руль в противоход: ведущее колесо — внутреннее по рулю, оно нагружено и катится чисто; на плане видно, с каким уводом идёт ведомое."},
   rackDX:{n:"Рейка вперёд / назад",min:-80,max:80,step:1,u:"мм",h:"Вперёд — Аккерман на большом угле падает, назад — растёт. Тяни «рейку» на виде сверху."},
   troDX:{n:"Шарнир тяги на кулаке: вперёд",min:-40,max:40,step:0.5,u:"мм",h:"Короче плечо — больше угол на том же ходе рейки."},
@@ -1182,10 +1257,15 @@ const TABS=[
    ctl:["ride","lolly","plateA","lbjDZ"],main:"vSide",rest:["w_c13","w_c14"],
    cav:"anti-dive — по мгновенному центру в боковой проекции и заданным ЦТ и тормозному балансу; клевок как движение считается без пружин и амортизаторов. Motion ratio — из геометрии стойки, без трения и прогиба.",
    met:["mr","wheelRate","antiDive","icBack","icH","caster"]},
+  {id:"rear",t:"Антисквот",sub:"задок: E36 / E46 / E92",
+   lead:"<b>Anti-squat</b> — какую долю приседа под газом держат рычаги задней подвески, а не пружины. Из боковой проекции: линия силы от центра колеса через мгновенный центр против линии «100 %» от центра колеса к высоте ЦТ над передней осью. 100 % — задок не приседает, больше 100 % — поднимается.",
+   ctlFn:()=>["rCar","rTravel"].concat((REAR[P.rCar]||REAR.e46).type==="trail"?["rPivot"]:["rUpper","rLower"]),main:"vRear",rest:["w_c15"],
+   met:["antiSquat","rIcX","rIcH"],
+   cav:"точки задней подвески оценочные, по опубликованным FDF цифрам для E36 и E92 (их E92 — тоже заглушка до скана); E46 взят как E36 с базой 2725. ЦТ посередине базы, высота из настроек. Присед — геометрия без пружин, амортизаторов и переноса веса; тяга считается через колесо (IRS, редуктор на кузове)."},
   {id:"all",t:"Всё сразу",sub:"все виды, графики, таблица",
    lead:"Все регулировки, все виды и графики, полная таблица значений.",
-   ctl:Object.keys(CTL).concat(["realign"]),main:"vTop",rest:["vFront","vSide","vPlan","w_c3","w_c4","w_c1","w_c2","w_c12","w_c5","w_c6","w_c7","w_c8","w_c10","w_c11","w_c13","w_c14","w_c9","vStamp"],
-   met:["ackStatic","ackLock","lockIn","lockOut","sensC","sensLock","caster","mtrail","camber0","camberIn","camberOut","kpi","included","scrub","spindle","rc","rcArm","bump","jack","lockRoll","rollCam","rollToe","mr","wheelRate","antiDive"]}
+   ctl:Object.keys(CTL).filter(k=>!/^r(Car|Travel|Pivot|Upper|Lower)$/.test(k)).concat(["realign"]),main:"vTop",rest:["vFront","vSide","vPlan","w_c3","w_c4","w_c1","w_c2","w_c12","w_c5","w_c6","w_c7","w_c8","w_c10","w_c11","w_c13","w_c14","vRear","w_c15","w_c9","vStamp"],
+   met:["ackStatic","ackLock","lockIn","lockOut","sensC","sensLock","caster","mtrail","camber0","camberIn","camberOut","kpi","included","scrub","spindle","rc","rcArm","bump","jack","lockRoll","rollCam","rollToe","mr","wheelRate","antiDive","antiSquat"]}
 ];
 const MET={
   ackStatic:{n:"Аккерман статический",u:"%",d:0},
@@ -1214,6 +1294,9 @@ const MET={
   mr:{n:"Motion ratio стойки",u:"",d:3},
   wheelRate:{n:"Жёсткость на колесе",u:"Н/мм",d:1},
   antiDive:{n:"Anti-dive",u:"%",d:0},
+  antiSquat:{n:"Anti-squat (задок)",u:"%",d:0},
+  rIcX:{n:"МЦ задка впереди оси",u:"м",d:2},
+  rIcH:{n:"МЦ задка над землёй",u:"мм",d:0},
   icBack:{n:"Мгновенный центр позади пятна",u:"м",d:2},
   icH:{n:"Мгновенный центр над землёй",u:"мм",d:0},
   spindle:{n:"Длина шпинделя",u:"мм",d:0},
@@ -1224,6 +1307,7 @@ const MET={
 let TAB="ackermann";
 const fmtStep=(v,st)=>{const d=(String(st).split(".")[1]||"").length;return (+v).toFixed(d);};
 function ctlHTML(id){
+  if(id==="rCar")return `<div class="ctl"><div class="ctl-h"><label for="c_rCar">Задняя подвеска</label></div><select id="c_rCar" class="rsel">${Object.entries(REAR).map(([k,v])=>`<option value="${k}">${v.n}</option>`).join("")}</select><p>Точки оценочные (≈), выставлены по опубликованным FDF цифрам; будут заменены замерами.</p></div>`;
   if(id==="realign")return `<div class="ctl"><label class="chk"><input type="checkbox" id="c_realign"><span>Выставить схождение заново на новом клиренсе<br><small style="color:var(--ink-2)">выключено — видно, как занижение уводит схождение</small></span></label></div>`;
   const c=CTL[id],sg=v=>(v<0?"−":"")+Math.abs(v);
   return `<div class="ctl" id="k_${id}"><div class="ctl-h"><label for="c_${id}">${c.n}</label>
@@ -1250,13 +1334,14 @@ function applyPreset(id){
   syncCtl();recompute();
 }
 function renderPanel(){
-  const t=TABS.find(x=>x.id===TAB);
+  const t=TABS.find(x=>x.id===TAB);if(t.ctlFn)t.ctl=t.ctlFn();
   $("#panel").innerHTML=`<div class="preset"><label>Сетап <select id="preset" aria-label="Готовый сетап">${PRESETS.map(p=>`<option value="${p.id}">${p.n}</option>`).join("")}</select></label><p class="note" id="presetNote"></p>${t.scen?`<div class="scen">${t.scen.map((o,i)=>`<button type="button" class="mini sc" data-i="${i}">▸ ${o.n}</button>`).join("")}</div>`:""}</div>
    <p class="lead">${t.lead}</p>${t.ctl.map(ctlHTML).join("")}${t.tools?`<div class="tools"><h2>Подобрать</h2>${t.tools.map((o,i)=>`<button type="button" class="tool" data-i="${i}" title="${o.h}">${o.n}</button>`).join("")}<p class="note" id="toolMsg" role="status"></p></div>`:""}
    <div class="delta"><h2>Что изменилось</h2><p class="sub">было → стало, относительно базы</p><table id="dtab" aria-label="Изменения относительно базы"></table>
    <div class="btns"><button type="button" id="pin" title="Текущая геометрия станет базой: от неё считаются изменения, она же — пунктир «база» на графиках">Запомнить как базу</button><button type="button" id="reset" title="Все регулировки и точки — как на чертеже">Вернуть всё как на чертеже</button></div></div>`;
   for(const id of t.ctl){
     if(id==="realign"){const cb=$("#c_realign");cb.checked=P.realign;cb.addEventListener("change",()=>{P.realign=cb.checked;recompute();});continue;}
+    if(id==="rCar"){const sel=$("#c_rCar");sel.value=P.rCar;sel.addEventListener("change",()=>{P.rCar=sel.value;renderPanel();recompute();});continue;}
     const c=CTL[id],box=$("#k_"+id);
     const set=v=>{v=+v;if(!isFinite(v))return;P[id]=Math.max(c.min,Math.min(c.max,v));markCustom();syncCtl();recompute();};
     $("#r_"+id).addEventListener("input",e=>set(e.target.value));
@@ -1346,6 +1431,7 @@ function drawAll(){
   if(visible("vTop"))drawTop(RES,CUR,mainId==="vTop");
   if(visible("vFront"))drawFront(RES,CUR,mainId==="vFront");
   if(visible("vSide"))drawSide(RES,CUR,mainId==="vSide");
+  if(visible("vRear")){drawRear(RES,mainId==="vRear");const q=rearCalc(0);$("#nRear").innerHTML=q?`${q.car.n} (≈): мгновенный центр <b>${fx(q.ic[0]/1000,2)} м</b> впереди оси и <b>${fx(q.ic[1],0)} мм</b> над землёй, anti-squat <b>${fx(q.pct,0)} %</b> при ЦТ ${P.cgH} мм и базе ${q.car.wb} мм. Линия силы идёт от центра колеса: редуктор на кузове, момент реакции не на рычагах.`:"";}
   if(visible("vPlan"))drawPlan(RES,CUR);
   if(visible("vStamp"))stampRows();
   const xi=RES.stat.xInt,dx=xi==null?0:HP.WC[0]-xi;
@@ -1367,7 +1453,7 @@ function drawAll(){
       let A=ALT[c.id];if(!A||A.gen!==GEN){A={gen:GEN,ser:[]};for(const v of c.alt.vals){const w=whatIf({[c.alt.key]:v});if(w)A.ser.push(c.ser(w.res,{ghost:true}).slice(0,1)[0]);}ALT[c.id]=A;}
       series=A.ser.map(s=>({...s,c:C["ink-3"],a:0.9,w:1,d:[3,3]})).concat(series);
       const lg=$("#w_"+c.id+" .altlg");if(lg)lg.textContent="тонкие — "+c.alt.n;}
-    const cur=c.cur==="s"?-P.s:c.cur==="di"?(CUR.ack&&CUR.s>0?CUR.ack.di:null):c.cur==="roll"?P.roll:0;
+    const cur=c.cur==="s"?-P.s:c.cur==="di"?(CUR.ack&&CUR.s>0?CUR.ack.di:null):c.cur==="roll"?P.roll:c.cur==="rt"?P.rTravel:0;
     chart($("#"+c.id),{series,xl:c.xl,yl:c.yl,cursor:cur,x:c.cur==="s"?[-P.stroke,P.stroke]:c.cur==="roll"?[-4,4]:null,y0:c.y0,minSpan:c.minSpan,key:GEN});
     $("#n_"+c.id).innerHTML=c.note(M,BASE.M);
   }

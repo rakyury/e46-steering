@@ -307,3 +307,16 @@ describe("suspension-school additions", () => {
   });
   test("included angle is KPI plus camber", () => { const M = run().M; near(M.included, M.kpi + M.camber0, 1e-9); });
 });
+
+describe("rear anti-squat model", () => {
+  test("E36 reproduces the reference readouts and squat lowers the figure", () => {
+    run(); K.P.rCar = "e36"; const q = K.rearCalc(0);
+    near(q.ic[0], 450, 1, "IC ahead"); near(q.ic[1], 351, 2, "IC height"); near(q.pct, 42, 1, "anti-squat");
+    assert.ok(K.rearCalc(30).pct < q.pct - 15, "squat drops it"); assert.ok(K.rearCalc(-30).pct > q.pct + 15, "lift raises it");
+  });
+  test("E92 virtual arms meet near the reference centre and the lower axis angle steers it", () => {
+    run(); K.P.rCar = "e92"; const q = K.rearCalc(0);
+    near(q.ic[0], 1620, 40, "IC ahead"); near(q.ic[1], 433, 10, "IC height"); near(q.pct, 38, 3, "anti-squat");
+    K.P.rLower = 12; assert.ok(K.rearCalc(0).pct > q.pct + 5, "steeper lower arm, more anti-squat");
+  });
+});
