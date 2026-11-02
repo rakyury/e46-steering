@@ -2,6 +2,7 @@
 // tests/__snapshots__. A broken picture (labels on top of each other, a wheel through the ground, a lost line) fails
 // here even when every number is still right. Refresh the baselines on purpose with: npm run snap
 const { test, expect } = require("@playwright/test");
+test.use({ colorScheme: "dark" }); // the baselines are the dark drafting theme
 
 const TABS = [
   { id: "ackermann", s: -40 },

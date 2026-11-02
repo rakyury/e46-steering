@@ -6,7 +6,7 @@ module.exports = defineConfig({
   timeout: 30000,
   retries: 0,
   reporter: [["list"]],
-  use: { baseURL: "http://127.0.0.1:8766", browserName: "chromium", viewport: { width: 1400, height: 900 }, colorScheme: "dark", deviceScaleFactor: 1 },
+  use: { baseURL: "http://127.0.0.1:8766", browserName: "chromium", viewport: { width: 1400, height: 900 }, deviceScaleFactor: 1 },
   // visual baselines live next to the specs without a platform suffix; canvas output is compared loosely enough
   // to ignore antialiasing, tightly enough to catch a moved label or a lost line
   snapshotPathTemplate: "{testDir}/__snapshots__/{arg}{ext}",
