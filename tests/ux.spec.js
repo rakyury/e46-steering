@@ -238,6 +238,28 @@ test.describe("share link", () => {
   });
 });
 
+test.describe("touch sign button", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  test("a floating ± over the focused field flips the sign and applies it", async ({ page }) => {
+    await open(page, "camber");
+    await expect(page.locator("#pm")).toBeHidden();
+    await page.click("#alignTg"); // the alignment row is folded away on a phone
+    await page.fill("#aToe", "0.3"); await page.press("#aToe", "Tab");
+    await expect.poll(() => page.evaluate(() => P.toe)).toBeCloseTo(0.3, 5);
+    await page.focus("#aToe");
+    await expect(page.locator("#pm")).toBeVisible();
+    await page.click("#pm");
+    await expect.poll(() => page.evaluate(() => P.toe)).toBeCloseTo(-0.3, 5);
+    await page.focus("#kS"); await page.fill("#kS", "12"); await page.click("#pm");
+    await expect.poll(() => page.evaluate(() => P.s)).toBeCloseTo(12, 5); // "+ = right" in the UI is s < 0 inside, so −12 typed → s = +12
+  });
+});
+
+test("the ± key is absent on a mouse screen", async ({ page }) => {
+  await open(page, "camber");
+  expect(await page.locator("#pm").count()).toBe(0);
+});
+
 test.describe("steering", () => {
   test("slider turns the wheels, centre button straightens them", async ({ page }) => {
     await open(page);

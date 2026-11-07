@@ -240,6 +240,8 @@ details.settings summary small{font-size:var(--t-sm);color:var(--ink-2)}
   .setwrap{grid-template-columns:minmax(0,1fr)}
   .setgrp + .setgrp{border-left:0;border-top:1px solid var(--ink-3)}
 }
+#pm{position:absolute;z-index:60;display:none;align-items:center;justify-content:center;width:44px;height:38px;border:1px solid var(--ink-2);border-radius:8px;background:var(--paper);color:var(--ink);font:600 18px var(--f-num);box-shadow:0 2px 8px rgba(0,0,0,.25);padding:0}
+#pm.on{display:flex}#pm:active{background:var(--ink-2);color:var(--paper)}
 @media (pointer:coarse){
   .setrow input,.hpt input{min-height:36px;font-size:14px}
   .drag-hint{display:none}
@@ -1622,6 +1624,19 @@ for(const [id,fn] of [["#aCam",v=>alignTo(v,RES.M.caster)],["#aCas",v=>alignTo(R
   const el=$(id);el.addEventListener("focus",()=>el.select());
   el.addEventListener("change",()=>{const v=num(el.value);if(isFinite(v)){stopPlay();fn(v);}else{el.blur();drawAll();}});
   el.addEventListener("keydown",e=>{if(e.key==="Enter")el.blur();if(e.key==="Escape"){el.value="";el.blur();drawAll();}});}
+// the phone's decimal keyboard has no minus: while such a field is being typed into, a floating ± key sits beside it
+if(matchMedia("(pointer:coarse)").matches){
+  const b=document.createElement("button");b.type="button";b.id="pm";b.textContent="±";b.setAttribute("aria-label","Сменить знак");document.body.append(b);
+  let cur=null;
+  const place=()=>{if(!cur)return;const r=cur.getBoundingClientRect(); // beside the field on its row; above it when there is no room
+    const side=r.right+50<=innerWidth;b.style.left=(side?r.right+6:Math.max(4,r.right-44))+scrollX+"px";b.style.top=(side?r.top+(r.height-38)/2:r.top-44)+scrollY+"px";};
+  b.addEventListener("pointerdown",e=>e.preventDefault()); // keep the field focused and the keyboard open
+  b.addEventListener("click",()=>{if(!cur)return;const el=cur,v=el.value.trim();el.value=/^[-−]/.test(v)?v.slice(1):"-"+v;
+    if(/\d/.test(el.value)){el.dispatchEvent(new Event("change"));}else{el.focus();}});
+  document.addEventListener("focusin",e=>{const el=e.target;if(el.matches&&el.matches('input[inputmode="decimal"]')){cur=el;place();b.classList.add("on");}});
+  document.addEventListener("focusout",e=>{if(e.target===cur)setTimeout(()=>{if(document.activeElement!==cur){b.classList.remove("on");cur=null;}},0);});
+  addEventListener("scroll",place,{passive:true});addEventListener("resize",place);
+}
 {const el=$("#kS");el.addEventListener("focus",()=>el.select());
   el.addEventListener("change",()=>{const v=num(el.value);if(isFinite(v)){stopPlay();setS(-v);}else{el.blur();drawAll();}});
   el.addEventListener("keydown",e=>{if(e.key==="Enter")el.blur();if(e.key==="Escape"){el.value="";el.blur();drawAll();}});}
