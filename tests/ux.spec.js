@@ -260,6 +260,29 @@ test("the ± key is absent on a mouse screen", async ({ page }) => {
   expect(await page.locator("#pm").count()).toBe(0);
 });
 
+test.describe("trail by angle", () => {
+  test("the caster tab leads with the loaded / unloaded trail chart and its conclusions", async ({ page }) => {
+    await open(page, "caster");
+    await expect(page.locator("#rest .ch").first()).toHaveAttribute("id", "w_c16");
+    const note = await page.locator("#n_c16").textContent();
+    expect(note).toMatch(/Нагруженное: прямо 37 → 12° \d+ → 30° \d+ → 45° \d+ мм/);
+    expect(note).toMatch(/Разгруженное уходит в минус с \d+°/);
+    await expect(page.locator("#take li")).toHaveCount(4);
+    await page.click("#tab_camber");
+    await expect(page.locator("#take li").first()).toContainText("развал нагруженного колеса");
+    await page.click("#tab_ride");
+    await expect(page.locator("#main #take")).toHaveCount(0);
+  });
+  test("the loaded wheel's trail grows with angle and less caster lowers it", async ({ page }) => {
+    await open(page, "caster");
+    const a = await page.evaluate(() => { const t = trailByAngle(RES); return [t.inAt(0), t.inAt(45), t.outZero]; });
+    expect(a[1]).toBeGreaterThan(a[0] + 40);
+    expect(a[2]).toBeGreaterThan(15); expect(a[2]).toBeLessThan(35);
+    const b = await page.evaluate(() => { const w = whatIf({ lolly: -10 }); const t = trailByAngle(w.res); return [t.inAt(0), t.inAt(45)]; });
+    expect(b[0]).toBeLessThan(a[0] - 5); expect(b[1]).toBeLessThan(a[1] - 3);
+  });
+});
+
 test.describe("steering", () => {
   test("slider turns the wheels, centre button straightens them", async ({ page }) => {
     await open(page);

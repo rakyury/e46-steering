@@ -150,6 +150,11 @@ input[type=range]::-moz-range-thumb{width:18px;height:20px;background:var(--red)
 .scen .mini{font-style:italic}
 .cav{margin:0;padding:var(--s2) var(--s4) var(--s3);font-size:var(--t-sm);color:var(--ink-2);line-height:1.4;border-top:1px dashed var(--ink-3)}
 .cav b{color:var(--ink);font-weight:600}
+.take{padding:var(--s2) var(--s4) var(--s3);border-top:1px dashed var(--ink-3)}
+.take h3{margin:0 0 var(--s1);font-size:var(--t-xs);font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2);font-style:normal}
+.take ul{margin:0;padding-left:1.1em;font-size:var(--t-sm);line-height:1.45;color:var(--ink-2)}
+.take li{margin:0 0 var(--s1)}.take li::marker{color:var(--mark)}
+.take b{color:var(--ink);font-weight:600}
 .tools h2{margin:0;font-size:var(--t-xs);font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2)}
 .tools .tool{text-align:left;font-style:italic}
 .tools .note{margin:0;font-size:var(--t-sm);color:var(--ink-2)}
@@ -1122,6 +1127,11 @@ function chart(cv,o){
   cv._map={x0,x1,l:m.l,pw};
 }
 const ok=q=>q&&!q.bad;
+// trail of the inner (loaded in counter-steer) and the outer wheel as functions of the inner wheel angle
+function trailByAngle(r){const pos=r.sw.filter(q=>ok(q)&&q.s>0&&q.ack).sort((a,b)=>a.ack.di-b.ack.di);
+  const at=(k,d)=>{if(d<=0)return r.m0.L.trail;for(let i=1;i<pos.length;i++){const a=pos[i-1],b=pos[i];if(a.ack.di<=d&&b.ack.di>=d){const t=(d-a.ack.di)/((b.ack.di-a.ack.di)||1);return a[k].trail+(b[k].trail-a[k].trail)*t;}}return NaN;};
+  let outZero=NaN;for(let i=1;i<pos.length;i++)if(pos[i-1].R.trail>0&&pos[i].R.trail<=0){const a=pos[i-1],b=pos[i];outZero=a.ack.di+(b.ack.di-a.ack.di)*a.R.trail/(a.R.trail-b.R.trail);break;}
+  return {inAt:d=>at("L",d),outAt:d=>at("R",d),outZero};}
 const sensAt=(r,s,k)=>{let b=null;for(const q of r.sw)if(ok(q)&&q["sens"+k]!=null&&(!b||Math.abs(q.s-s)<Math.abs(b.s-s)))b=q;return b?b["sens"+k]:NaN;};
 const fx=(v,d=1)=>{if(!isFinite(v))return "—";const a=Math.abs(v).toFixed(d);return (v<0&&+a!==0?"−":"")+a;}; // no "−0.0"
 // x for steering charts is "wheel left ← → right", i.e. minus rack position
@@ -1156,6 +1166,17 @@ const CH=[
    ser:r=>[{pts:r.sw.map(q=>ok(q)?[-q.s,q.L.mtrail]:null),c:C.mark,w:2.6},{pts:r.sw.map(q=>ok(q)?[-q.s,q.L.trail]:null),c:C.ink,w:1.4},{pts:r.sw.map(q=>ok(q)?[-q.s,q.L.scrub]:null),c:C["ink-2"],d:[6,4],w:1.4}],
    dots:c=>[c.L.mtrail,c.L.trail,c.L.scrub],
    note:M=>`Прямо: мех. трейл <b>${fx(M.mtrail)} мм</b>. Наружное колесо на локе: трейл <b>${fx(M.trailOut)} мм</b> — от него зависит, как руль возвращается в заносе.`},
+  {id:"c16",t:"Трейл по углу: нагруженное и разгруженное колесо",xl:"угол внутреннего колеса, °",yl:"трейл по земле, мм",cur:"di",minSpan:40,
+   alt:{key:"plateR",vals:[45,85],n:"эксцентриситет опоры 45 / 85 мм (KPI больше / меньше)"},
+   lg:[["внутреннее по рулю — в контре нагружено","mark"],["наружное по рулю — разгружено","ink"],["ноль: дальше колесо тянет руль в лок","ink-3","d"]],
+   ser:(r,g)=>{const pos=r.sw.filter(q=>ok(q)&&q.s>0&&q.ack).sort((a,b)=>a.ack.di-b.ack.di); // s > 0: the left wheel is the inner one
+     const out=[{pts:pos.map(q=>[q.ack.di,q.L.trail]),c:C.mark,w:2.6},{pts:pos.map(q=>[q.ack.di,q.R.trail]),c:C.ink,w:1.4}];
+     if(!g.ghost&&pos.length)out.push({pts:[[0,0],[pos[pos.length-1].ack.di,0]],c:C["ink-3"],w:1,d:[5,4]});return out;},
+   dots:c=>c.s>0?[c.L.trail,c.R.trail]:[c.R.trail,c.L.trail],
+   note:()=>{const tr=trailByAngle(RES);const f=v=>isFinite(v)?fx(v,0):"—";
+     return `Нагруженное: прямо <b>${f(tr.inAt(0))}</b> → 12° <b>${f(tr.inAt(12))}</b> → 30° <b>${f(tr.inAt(30))}</b> → 45° <b>${f(tr.inAt(45))} мм</b>. `+
+       (isFinite(tr.outZero)?`Разгруженное уходит в минус с <b>${fx(tr.outZero,0)}°</b>. `:"")+
+       "В заносе шина за пиком и её собственный трейл почти пропадает: руль ведёт этот, механический. Рост кривой задают кастер и KPI, сдвиг всей кривой — кастер-офсет.";}},
   {id:"c6",t:"Подъём кузова при повороте",xl:"← влево · руль · вправо →",yl:"мм",cur:"s",minSpan:4,
    lg:[["левое","red"],["правое","blue"]],
    ser:r=>[{pts:r.sw.map(q=>ok(q)?[-q.s,q.L.jack]:null),c:C.red},{pts:r.sw.map(q=>ok(q)?[-q.s,q.R.jack]:null),c:C.blue}],
@@ -1244,12 +1265,20 @@ const TABS=[
    met:["ackStatic","ack30","ackLock","lockIn","lockOut","sensC","sensLock"]},
   {id:"caster",t:"Кастер и трейл",sub:"шаровая, лолипоп, опора",
    lead:"<b>Кастер</b> — наклон оси поворота назад. <b>Трейл</b> — насколько пятно контакта отстаёт от точки, где ось входит в землю. Больше трейл — тяжелее руль и сильнее он возвращается.",
-   ctl:["lbjDX","lolly","plateA"],main:"vSide",rest:["w_c5","w_c6"],
-   cav:"трейл считается по жёсткому колесу: пневматический трейл шины (ещё 20–40 мм на сцеплении) не учтён, поэтому реальный возврат руля сильнее, чем по мех. трейлу. Шина — барабан, пятно в центре протектора.",
+   ctl:["lbjDX","lolly","plateA"],main:"vSide",rest:["w_c16","w_c5","w_c6"],
+   take:["<b>Руль ведёт динамический трейл нагруженного колеса</b> — в контре это внутреннее по рулю. На чертеже он растёт с 37 мм прямо до ~95 мм к 45°: отсюда тяжёлый, «нервный» руль в большом угле и резкий самовыворот — колесо тянется туда, куда реально катится.",
+     "<b>Рост трейла с углом задают кастер и KPI.</b> Кастер-офсет (ось через центр ступицы) лишь сдвигает всю кривую: офсет 0 при том же кастере — минус ~11 мм везде, развал и Аккерман те же. Ось через центр ступицы — красиво на картинке, но не «идеальное вращение»: вбок центр ступицы всё равно в ~135 мм от оси.",
+     "<b>Разгруженное колесо</b> с ~25° уходит в отрицательный трейл и толкает руль в лок. Анти-Аккерман в большом угле его разгружает.",
+     "<b>Спокойнее руль без потери лока:</b> кастер 3° лолипопом (−9 мм трейла везде) и опора наружу (KPI ниже — меньше рост). Готово в пресете «стабильное пятно, кастер 3°»."],
+   cav:"трейл считается по жёсткому колесу: пневматический трейл шины (ещё 20–40 мм на сцеплении) не учтён, поэтому на сцеплении возврат руля сильнее. За пиком сцепления, в заносе, он падает к нулю и может уйти в минус — там остаётся механический. Шина — барабан, пятно в центре протектора.",
    met:["caster","trail","mtrail","coff","trailOut","jack","lockRoll"]},
   {id:"camber",t:"Развал и KPI",sub:"опора, слот стакана",
    lead:"<b>Развал</b> стоя и в повороте. Из-за кастера и KPI внутреннее колесо в повороте выпрямляется и уходит в плюс; наружное сначала заваливается сильнее, а ближе к локу снова выпрямляется.",
    ctl:["plateR","plateA","slot","lbjDY","et"],main:"vFront",rest:["w_c2","w_c1"],
+   take:["<b>Сцепление переда решает развал нагруженного колеса, а не трейл.</b> Трейл — это ощущение руля и самовыворот, развал — сколько шина держит, Аккерман — спорят ли колёса между собой.",
+     "<b>Кастер и KPI двигают и трейл, и развал сразу</b> — их нельзя настроить порознь. Меньше KPI (опора наружу): ровнее руль, нагруженное колесо меньше уходит в плюс, передок меньше поднимается — но растёт скраб.",
+     "<b>Скраб на кинематику почти не влияет</b> — ±15 мм вылета диска не меняют ни развал, ни трейл по углу. Это плечо продольных сил: отдача в руль на кочках и при торможении. Удобно возвращать вылетом диска после сдвига опоры.",
+     "Чтобы менять KPI, а не развал, развал держи <b>слотом стакана</b>: если выставлять его плитами, KPI и развал уходят вместе."],
    scen:[{n:"лок: что с развалом",P:{},s:"lock"},{n:"крен 2° и контр-руль 30°",P:{roll:2},s:-38}],
    cav:"развал к дороге — геометрический: без прогиба шины под боковой силой и без податливости опор. Нагрузка на колёса не считается, поэтому «пятно» здесь — угол, а не площадь.",
    met:["camber0","camberIn","camberOut","kpi","included","scrub","spindle","caster"]},
@@ -1272,7 +1301,7 @@ const TABS=[
    cav:"точки задней подвески оценочные, по опубликованным FDF цифрам для E36 и E92 (их E92 — тоже заглушка до скана); E46 взят как E36 с базой 2725. ЦТ посередине базы, высота из настроек. Присед — геометрия без пружин, амортизаторов и переноса веса; тяга считается через колесо (IRS, редуктор на кузове)."},
   {id:"all",t:"Всё сразу",sub:"все виды, графики, таблица",
    lead:"Все регулировки, все виды и графики, полная таблица значений.",
-   ctl:Object.keys(CTL).filter(k=>!/^r(Car|Travel|Pivot|Upper|Lower)$/.test(k)).concat(["realign"]),main:"vTop",rest:["vFront","vSide","vPlan","w_c3","w_c4","w_c1","w_c2","w_c12","w_c5","w_c6","w_c7","w_c8","w_c10","w_c11","w_c13","w_c14","vRear","w_c15","w_c9","vStamp"],
+   ctl:Object.keys(CTL).filter(k=>!/^r(Car|Travel|Pivot|Upper|Lower)$/.test(k)).concat(["realign"]),main:"vTop",rest:["vFront","vSide","vPlan","w_c3","w_c4","w_c1","w_c2","w_c12","w_c16","w_c5","w_c6","w_c7","w_c8","w_c10","w_c11","w_c13","w_c14","vRear","w_c15","w_c9","vStamp"],
    met:["ackStatic","ackLock","lockIn","lockOut","sensC","sensLock","caster","mtrail","camber0","camberIn","camberOut","kpi","included","scrub","spindle","rc","rcArm","bump","jack","lockRoll","rollCam","rollToe","mr","wheelRate","antiDive","antiSquat"]}
 ];
 const MET={
@@ -1390,6 +1419,8 @@ function setTab(id){
   const t=TABS.find(x=>x.id===id),pool=$("#pool"),main=$("#main"),rest=$("#rest");
   [...main.children,...rest.children].forEach(el=>pool.appendChild(el));
   main.appendChild($("#"+t.main));
+  {let tk=$("#take");if(!tk){tk=document.createElement("div");tk.id="take";tk.className="take";}
+   if(t.take){tk.innerHTML="<h3>Что из этого следует</h3><ul>"+t.take.map(x=>"<li>"+x+"</li>").join("")+"</ul>";main.appendChild(tk);}else pool.appendChild(tk);}
   {let cv=$("#cav");if(!cv){cv=document.createElement("p");cv.id="cav";cv.className="cav";}if(t.cav){cv.innerHTML="<b>Чего модель не учитывает.</b> "+t.cav;main.appendChild(cv);}else pool.appendChild(cv);}
   for(const r of t.rest)rest.appendChild($("#"+r));
   document.querySelectorAll(".drag-hint").forEach(e=>e.hidden=!main.contains(e));
