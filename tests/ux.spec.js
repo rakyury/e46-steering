@@ -183,6 +183,17 @@ test.describe("presets", () => {
   });
 });
 
+test("ball joint and tie-rod joint together lower the trail and keep the lock", async ({ page }) => {
+  await open(page, "caster");
+  const a = await page.evaluate(() => [RES.M.trail, RES.M.lockIn, RES.M.sensC, trailByAngle(RES).inAt(45)]);
+  await page.fill("#c_kDX", "-15"); await page.press("#c_kDX", "Tab");
+  await expect.poll(() => page.evaluate(() => RES.M.trail)).toBeLessThan(a[0] - 9);
+  const b = await page.evaluate(() => [RES.M.trail, RES.M.lockIn, RES.M.sensC, trailByAngle(RES).inAt(45)]);
+  expect(Math.abs(b[1] - a[1])).toBeLessThan(0.5);
+  expect(Math.abs(b[2] - a[2])).toBeLessThan(0.05);
+  expect(b[3]).toBeLessThan(a[3] - 8);
+});
+
 test.describe("school additions", () => {
   test("sensitivity chart, drift plan, scenarios and caveats on the Ackermann tab", async ({ page }) => {
     await open(page, "ackermann");
