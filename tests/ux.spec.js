@@ -149,23 +149,37 @@ test.describe("info cards", () => {
 });
 
 test.describe("presets", () => {
-  test("choosing the stable-patch setup applies it; a manual change makes it custom", async ({ page }) => {
+  test("presets keep the top mount as drawn; a manual change makes it custom", async ({ page }) => {
     await open(page, "camber");
-    await page.selectOption("#preset", "stable");
-    await expect.poll(() => page.evaluate(() => P.plateR)).toBe(75);
-    expect(await page.evaluate(() => [P.lbjDX, P.slot, P.roll])).toEqual([40, 3.2, 2]);
-    await expect.poll(() => page.evaluate(() => RES.M.caster)).toBeCloseTo(4.5, 1); // caster 4.5° fitted by the lollipop
-    expect(await page.evaluate(() => P.lolly)).toBeGreaterThan(1);
-    await expect(page.locator("#presetNote")).toContainText("±3°");
-    await expect.poll(() => page.evaluate(() => RES.M.camber0)).toBeCloseTo(-5.6, 1);
+    const plate = await page.evaluate(() => [P.plateR, P.plateA]);
+    await page.selectOption("#preset", "stable3");
+    await expect.poll(() => page.evaluate(() => RES.M.caster)).toBeCloseTo(3, 1); // caster 3° fitted by the lollipop
+    expect(await page.evaluate(() => [P.plateR, P.plateA])).toEqual(plate);
+    expect(await page.evaluate(() => [P.arm, P.slot, P.rackDZ, P.roll])).toEqual([0, 1.15, 5, 2]);
+    expect(await page.evaluate(() => P.lolly)).toBeLessThan(-10);
+    await expect.poll(() => page.evaluate(() => RES.M.camber0)).toBeCloseTo(-5.5, 1);
+    expect(Math.abs(await page.evaluate(() => RES.M.bump))).toBeLessThan(0.1);
+    await expect(page.locator("#presetNote")).toContainText("±3.2°");
     await page.fill("#c_slot", "2"); await page.press("#c_slot", "Tab");
     await expect(page.locator("#preset")).toHaveValue("custom");
-    await page.selectOption("#preset", "stable3");
-    await expect.poll(() => page.evaluate(() => RES.M.caster)).toBeCloseTo(3, 1);
-    expect(await page.evaluate(() => [P.lbjDX, P.slot])).toEqual([0, 2.15]);
+    await page.selectOption("#preset", "stable3arm");
+    await expect.poll(() => page.evaluate(() => RES.M.kpi)).toBeCloseTo(13.9, 0);
+    expect(await page.evaluate(() => [P.arm, P.slot])).toEqual([-20, 3.25]);
+    await expect.poll(() => page.evaluate(() => RES.M.camber0)).toBeCloseTo(-5.0, 1);
+    await page.selectOption("#preset", "stable");
+    await expect.poll(() => page.evaluate(() => RES.M.caster)).toBeCloseTo(4.5, 1);
     await page.selectOption("#preset", "drawing");
     await expect.poll(() => page.evaluate(() => P.plateR)).toBeCloseTo(63.5, 0);
+    expect(await page.evaluate(() => [P.arm, P.rackDZ])).toEqual([0, 0]);
     await expect.poll(() => page.evaluate(() => RES.M.camber0)).toBeCloseTo(-4.69, 2);
+  });
+  test("the arm-length control moves the ball joint in: less KPI, more positive camber", async ({ page }) => {
+    await open(page, "camber");
+    const k0 = await page.evaluate(() => [RES.M.kpi, RES.M.camber0]);
+    await page.fill("#c_arm", "-10"); await page.press("#c_arm", "Tab");
+    await expect.poll(() => page.evaluate(() => RES.M.kpi)).toBeCloseTo(k0[0] - 0.85, 1);
+    expect(await page.evaluate(() => RES.M.camber0)).toBeGreaterThan(k0[1] + 0.8);
+    await expect.poll(() => page.evaluate(() => location.hash)).toContain("arm=-10");
   });
 });
 

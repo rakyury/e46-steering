@@ -414,7 +414,7 @@ let CAR={...CAR0};
 
 // ───────── adjustable parameters
 let ACK0=0; // tie-rod joint offset (mm, outboard) at which the steering is parallel near centre; found by calibrateAck0()
-const DEF={s:0,stroke:60,rackDX:0,rackDZ:0,troDX:0,troDY:0,troDZ:0,lbjDX:0,lbjDY:0,lolly:0,plateR:0,plateA:0,slot:0,ride:0,roll:0,rollShare:55,et:0,lbjDZ:0,drift:0,rCar:"e46",rTravel:0,rPivot:0,rUpper:-2,rLower:8,cgH:500,brakeF:66,spring:80,toe:0,wheelbase:2725,realign:false};
+const DEF={s:0,arm:0,stroke:60,rackDX:0,rackDZ:0,troDX:0,troDY:0,troDZ:0,lbjDX:0,lbjDY:0,lolly:0,plateR:0,plateA:0,slot:0,ride:0,roll:0,rollShare:55,et:0,lbjDZ:0,drift:0,rCar:"e46",rTravel:0,rPivot:0,rUpper:-2,rLower:8,cgH:500,brakeF:66,spring:80,toe:0,wheelbase:2725,realign:false};
 let P={};
 function plateFrame(){
   const u0=nrm(sub(HP.TOP,HP.DLOW));
@@ -432,7 +432,9 @@ function build(side){
   const off=(r,a)=>add(mul(pf.e1,r*Math.cos(a*DEG)),mul(pf.e2,r*Math.sin(a*DEG)));
   const T=add(HP.TOP,sub(off(P.plateR,P.plateA),off(pf.r0,pf.a0)));
   const k=pf.e1, sl=-P.slot*DEG;
-  const Dk=add(HP.SLOTP,rotAround(sub(HP.DLOW,HP.SLOTP),k,sl));
+  // arm length: a shorter arm (−) puts the ball joint and with it the whole knuckle further in; the top mount stays put
+  const A=v=>add(v,[0,P.arm,0]);
+  const Dk=A(add(HP.SLOTP,rotAround(sub(HP.DLOW,HP.SLOTP),k,sl)));
   const uk=rotAround(pf.u0,k,sl);
   const c=CAR.camber*DEG;
   // lollipop: rod end at the rear bush pushes the arm's rear leg outward, the arm swings about a vertical axis through AF
@@ -441,10 +443,10 @@ function build(side){
   const swing=v=>add(HP.AF,rotAround(sub(v,HP.AF),[0,0,1],psi));
   const L={
     AF:HP.AF,AR:swing(HP.AR),T,
-    LBJa:swing(HP.LBJ),
-    LBJk:add(HP.LBJ,[P.lbjDX,P.lbjDY,-P.lbjDZ]), // lbjDZ: + = the joint sits lower in the knuckle (extended ball joint)
-    TROk:add(HP.TRO,[P.troDX,P.troDY+ACK0,P.troDZ]), // ACK0: the control's zero is parallel steer, not the drawing
-    Dk,uk,ak:[0,Math.cos(c),-Math.sin(c)],WCk:add(HP.WC,mul([0,Math.cos(c),-Math.sin(c)],-P.et)), // ET: + tucks the wheel in, − pushes it out along the hub axis
+    LBJa:swing(A(HP.LBJ)),
+    LBJk:add(A(HP.LBJ),[P.lbjDX,P.lbjDY,-P.lbjDZ]), // lbjDZ: + = the joint sits lower in the knuckle (extended ball joint)
+    TROk:add(A(HP.TRO),[P.troDX,P.troDY+ACK0,P.troDZ]), // ACK0: the control's zero is parallel steer, not the drawing
+    Dk,uk,ak:[0,Math.cos(c),-Math.sin(c)],WCk:add(A(HP.WC),mul([0,Math.cos(c),-Math.sin(c)],-P.et)), // ET: + tucks the wheel in, − pushes it out along the hub axis
     TRI0:add(HP.TRI,[P.rackDX,0,P.rackDZ]),
     plateC:HP.PLATE.slice()
   };
@@ -1249,6 +1251,7 @@ const CTL={
   plateA:{n:"Поворот развальной плиты",min:-180,max:180,step:1,u:"°",h:"0° — смещение вперёд, 90° — наружу. Наружу — меньше отриц. развала, назад — больше кастера."},
   plateR:{n:"Эксцентриситет опоры",min:0,max:90,step:0.5,u:"мм",h:"Насколько верх стойки смещён от центра плиты."},
   slot:{n:"Наклон стакана в слоте кулака",min:-4,max:4,step:0.05,u:"°",h:"+ — больше отрицательного развала."},
+  arm:{n:"Длина рычага: длиннее",min:-20,max:10,step:1,u:"мм",h:"− — рычаг короче: шаровая и весь кулак уходят внутрь, верх стойки на месте. KPI меньше — ровнее руль и пятно в угле, меньше подъём; колея уже на столько же (вернуть вылетом диска — скраб вырастет). Развал уходит в плюс, вернуть слотом."},
   lbjDY:{n:"Шаровая в слоте кулака: наружу",min:-30,max:30,step:0.5,u:"мм",h:"Меняет развал и скраб."},
   et:{n:"Вылет диска ET: больше (колесо внутрь)",min:-30,max:30,step:1,u:"мм",h:"− — диск с меньшим вылетом или проставка: колесо наружу по оси ступицы, скраб и длина шпинделя растут мм в мм, подъём на локе сильнее, развал тот же."},
   ride:{n:"Клиренс",min:-60,max:60,step:1,u:"мм",h:"− — занижение. Смотри развал, подруливание и центр крена."},
@@ -1274,7 +1277,7 @@ const TABS=[
    met:["caster","trail","mtrail","coff","trailOut","jack","lockRoll"]},
   {id:"camber",t:"Развал и KPI",sub:"опора, слот стакана",
    lead:"<b>Развал</b> стоя и в повороте. Из-за кастера и KPI внутреннее колесо в повороте выпрямляется и уходит в плюс; наружное сначала заваливается сильнее, а ближе к локу снова выпрямляется.",
-   ctl:["plateR","plateA","slot","lbjDY","et"],main:"vFront",rest:["w_c2","w_c1"],
+   ctl:["arm","plateR","plateA","slot","lbjDY","et"],main:"vFront",rest:["w_c2","w_c1"],
    take:["<b>Сцепление переда решает развал нагруженного колеса, а не трейл.</b> Трейл — это ощущение руля и самовыворот, развал — сколько шина держит, Аккерман — спорят ли колёса между собой.",
      "<b>Кастер и KPI двигают и трейл, и развал сразу</b> — их нельзя настроить порознь. Меньше KPI (опора наружу): ровнее руль, нагруженное колесо меньше уходит в плюс, передок меньше поднимается — но растёт скраб.",
      "<b>Скраб на кинематику почти не влияет</b> — ±15 мм вылета диска не меняют ни развал, ни трейл по углу. Это плечо продольных сил: отдача в руль на кочках и при торможении. Удобно возвращать вылетом диска после сдвига опоры.",
@@ -1357,17 +1360,19 @@ const PRESETS=[
   {id:"custom",n:"свой (регулировки ниже)",note:""},
   {id:"drawing",n:"как на чертеже",P:{},
    note:"Все регулировки в ноль, точки с чертежа. Параллельный руль, развал стоя −4.69°, кастер 4.77°, KPI 15.6°, мех. трейл 37 мм."},
-  {id:"stable",n:"стабильное пятно 12–45°",P:{plateR:75,plateA:63,lbjDX:40,lbjDY:0,et:0,slot:3.2,toe:0,troDY:0,troDX:0,rackDX:0,rackDZ:0,troDZ:0,ride:0,roll:2},cas:4.5,
-   note:"Найден перебором ~1200 комбинаций: при контр-руле и крене кузова 2° развал нагруженного колеса к дороге держится в <b>±3°</b> на 12–45° (на чертеже ±4.7°), ноль в 30°. Опора наружу (эксцентриситет <b>75</b>) снимает KPI до <b>14.5°</b>; кастер <b>4.5°</b> выставлен лолипопом (≈ +2 мм), больше не добавлять; возврат руля даёт мех. трейл <b>65 мм</b> (шаровая назад на 40) и подъём <b>17 мм</b> на локе; слот <b>+3.2°</b> ставит развал стоя <b>−5.6°</b>. Та же шаровая назад даёт анти-Аккерман в большом угле: ведомое на локе <b>76°</b> против <b>55°</b>. Крен 2° включён в сетап: под свой крен подбирай слот (на 1° крена ≈ 0.5° слота)."},
-  {id:"stable3",n:"стабильное пятно, кастер 3° (руль руками)",P:{plateR:75,plateA:63,lbjDX:0,lbjDY:0,et:0,slot:2.15,toe:0,troDY:0,troDX:0,rackDX:0,rackDZ:0,troDZ:0,ride:0,roll:2},cas:3,
-   note:"Та же опора (эксцентриситет <b>75</b>, KPI <b>14.7°</b>), но кастер <b>3°</b> лолипопом (≈ −10 мм) и шаровая на месте: трейл не добавлен, мех. трейл <b>28 мм</b>, подъём на локе <b>14 мм</b>. Руль возвращается слабее, его придётся вести руками. Полоса развала нагруженного колеса при крене 2° — <b>±2.8°</b> на 12–45°, ноль в 30°, слот <b>+2.15°</b>, развал стоя <b>−5.2°</b>. Аккерман почти параллельный: ведомое на 45° стоит на 49°, лок 51/52°."}
+  {id:"stable3",n:"стабильный, кастер 3° (рекомендую)",P:{arm:0,slot:1.15,lbjDX:0,lbjDY:0,lbjDZ:0,et:0,toe:0,troDY:0,troDX:0,troDZ:0,rackDX:0,rackDZ:5,ride:0,roll:2},cas:3,
+   note:"Верх стойки на месте (у крыла), только штатное: кастер <b>3°</b> лолипопом (≈ −14 мм), развал стоя <b>−5.5°</b> слотом стакана (<b>+1.15°</b>), рейка <b>+5 мм</b> проставками. При крене 2° и контре развал нагруженного колеса к дороге держится в <b>±3.2°</b> на 12–45° (на чертеже ±4.7°), ноль около 30°. Трейл нагруженного <b>28 → 91 мм</b> к 45° (чертёж 37 → 99) — руль спокойнее, самовозврат остаётся. Подруливание при ходе подвески почти ноль (на чертеже 0.45° на 40 мм). Цена: разгруженное колесо уходит в минус трейла с 18°. Лок 49/56°, анти-Аккерман к локу."},
+  {id:"stable3arm",n:"стабильный, кастер 3°, рычаг −20 мм",P:{arm:-20,slot:3.25,lbjDX:0,lbjDY:0,lbjDZ:0,et:0,toe:0,troDY:0,troDX:0,troDZ:0,rackDX:0,rackDZ:5,ride:0,roll:2},cas:3,
+   note:"То же, плюс рычаг на <b>20 мм короче</b>: шаровая и кулак внутрь, KPI <b>15.6 → 13.9°</b>. Развал стоя <b>−5.0°</b> (слот <b>+3.25°</b> — развал от короткого рычага уходит в плюс). Полоса развала нагруженного <b>±2.9°</b>, трейл <b>28 → 83 мм</b> к 45°, подъём на локе <b>12.5 мм</b> (было 14), минус трейла у разгруженного с 21°. Колея уже на 20 мм с каждой стороны: проставкой 20 мм её можно вернуть, но скраб вырастет до ~100 мм — больше отдачи в руль."},
+  {id:"stable",n:"стабильный, кастер 4.5° (больше самовозврата)",P:{arm:0,slot:2.2,lbjDX:0,lbjDY:0,lbjDZ:0,et:0,toe:0,troDY:0,troDX:0,troDZ:0,rackDX:0,rackDZ:5,ride:0,roll:2},cas:4.5,
+   note:"Верх стойки на месте, кастер <b>4.5°</b> лолипопом (≈ −2 мм), развал стоя <b>−6.0°</b> слотом (<b>+2.2°</b>), рейка <b>+5 мм</b>. Руль возвращается сильнее: трейл <b>35 → 97 мм</b> к 45°, минус у разгруженного только с 23°. Плата — полоса развала шире: <b>±3.4°</b> на 12–45°, и руль в большом угле тяжелее и резче. Лок 49/54°."}
 ];
 function markCustom(){if(PRESET==="custom")return;PRESET="custom";const sel=$("#preset");if(sel){sel.value="custom";$("#presetNote").innerHTML="";}}
 function applyPreset(id){
   const p=PRESETS.find(x=>x.id===id);if(!p||!p.P)return;
   stopPlay();
   if(id==="drawing"){resetHP();CAR={...CAR0};const s=P.s;resetP();calibrateAck0();P.s=s;PDEF={...P};fillSettings();}
-  else {Object.assign(P,p.P);if(p.cas!=null)fit("lolly","caster",p.cas);} // caster as a number: the lollipop is fitted to it on this top mount
+  else {Object.assign(P,{plateR:DEF0.plateR,plateA:DEF0.plateA},p.P);if(p.cas!=null)fit("lolly","caster",p.cas);} // plate as drawn: the top mount already sits at the fender // caster as a number: the lollipop is fitted to it on this top mount
   syncCtl();recompute();
 }
 function renderPanel(){
